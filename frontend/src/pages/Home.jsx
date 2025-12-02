@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { FaPaw, FaBone, FaCat, FaDog } from 'react-icons/fa'
+import { FaPaw, FaBone, FaCat, FaDog, FaHeart, FaLightbulb, FaListOl, FaExclamationTriangle, FaShoppingCart, FaCopyright } from 'react-icons/fa'
 import { Link } from 'react-router-dom'
 import axios from 'axios'
 import styles from './Home.module.css'
@@ -88,6 +88,87 @@ function Home() {
 
   return (
     <div className={styles.container}>
+      {/* Decorative Pet Images - Specific Breeds */}
+      {/* These use SVG placeholders. Replace with actual images in /public/images/ */}
+      {/* Old English Sheepdog Puppy */}
+      <img 
+        src="/images/oes-puppy.jpg" 
+        alt="Old English Sheepdog puppy" 
+        className={`${styles.petImage} ${styles.puppy1}`}
+        loading="lazy"
+        onError={(e) => {
+          if (!e.target.dataset.fallback) {
+            e.target.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="400" height="400"%3E%3Crect fill="%23ff6b9d" width="400" height="400"/%3E%3Ctext fill="white" font-family="system-ui" font-size="24" font-weight="bold" x="50%25" y="48%25" text-anchor="middle"%3E🐕%3C/text%3E%3Ctext fill="white" font-family="system-ui" font-size="16" x="50%25" y="58%25" text-anchor="middle"%3EOES Puppy%3C/text%3E%3C/svg%3E';
+            e.target.dataset.fallback = 'true';
+          }
+        }}
+      />
+      {/* German Shepherd Puppy */}
+      <img 
+        src="/images/german-shepherd-puppy.jpg" 
+        alt="German Shepherd puppy" 
+        className={`${styles.petImage} ${styles.puppy2}`}
+        loading="lazy"
+        onError={(e) => {
+          if (!e.target.dataset.fallback) {
+            e.target.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="400" height="400"%3E%3Crect fill="%234ecdc4" width="400" height="400"/%3E%3Ctext fill="white" font-family="system-ui" font-size="24" font-weight="bold" x="50%25" y="48%25" text-anchor="middle"%3E🐕%3C/text%3E%3Ctext fill="white" font-family="system-ui" font-size="14" x="50%25" y="58%25" text-anchor="middle"%3EGerman Shepherd%3C/text%3E%3C/svg%3E';
+            e.target.dataset.fallback = 'true';
+          }
+        }}
+      />
+      {/* Doberman Puppy */}
+      <img 
+        src="/images/doberman-puppy.jpg" 
+        alt="Doberman puppy" 
+        className={`${styles.petImage} ${styles.puppy3}`}
+        loading="lazy"
+        onError={(e) => {
+          if (!e.target.dataset.fallback) {
+            e.target.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="400" height="400"%3E%3Crect fill="%2395e1d3" width="400" height="400"/%3E%3Ctext fill="white" font-family="system-ui" font-size="24" font-weight="bold" x="50%25" y="48%25" text-anchor="middle"%3E🐕%3C/text%3E%3Ctext fill="white" font-family="system-ui" font-size="16" x="50%25" y="58%25" text-anchor="middle"%3EDoberman%3C/text%3E%3C/svg%3E';
+            e.target.dataset.fallback = 'true';
+          }
+        }}
+      />
+      {/* Sphynx Kitten */}
+      <img 
+        src="/images/sphynx-kitten.jpg" 
+        alt="Sphynx kitten" 
+        className={`${styles.petImage} ${styles.kitten1}`}
+        loading="lazy"
+        onError={(e) => {
+          if (!e.target.dataset.fallback) {
+            e.target.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="400" height="400"%3E%3Crect fill="%23ffe66d" width="400" height="400"/%3E%3Ctext fill="white" font-family="system-ui" font-size="24" font-weight="bold" x="50%25" y="48%25" text-anchor="middle"%3E🐱%3C/text%3E%3Ctext fill="white" font-family="system-ui" font-size="16" x="50%25" y="58%25" text-anchor="middle"%3ESphynx%3C/text%3E%3C/svg%3E';
+            e.target.dataset.fallback = 'true';
+          }
+        }}
+      />
+      {/* Maine Coon Kitten */}
+      <img 
+        src="/images/maine-coon-kitten.jpg" 
+        alt="Maine Coon kitten" 
+        className={`${styles.petImage} ${styles.kitten2}`}
+        loading="lazy"
+        onError={(e) => {
+          if (!e.target.dataset.fallback) {
+            e.target.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="400" height="400"%3E%3Crect fill="%23ff8fb3" width="400" height="400"/%3E%3Ctext fill="white" font-family="system-ui" font-size="24" font-weight="bold" x="50%25" y="48%25" text-anchor="middle"%3E🐱%3C/text%3E%3Ctext fill="white" font-family="system-ui" font-size="14" x="50%25" y="58%25" text-anchor="middle"%3EMaine Coon%3C/text%3E%3C/svg%3E';
+            e.target.dataset.fallback = 'true';
+          }
+        }}
+      />
+      {/* Siamese Kitten */}
+      <img 
+        src="/images/siamese-kitten.jpg" 
+        alt="Siamese kitten" 
+        className={`${styles.petImage} ${styles.kitten3}`}
+        loading="lazy"
+        onError={(e) => {
+          if (!e.target.dataset.fallback) {
+            e.target.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="400" height="400"%3E%3Crect fill="%23667eea" width="400" height="400"/%3E%3Ctext fill="white" font-family="system-ui" font-size="24" font-weight="bold" x="50%25" y="48%25" text-anchor="middle"%3E🐱%3C/text%3E%3Ctext fill="white" font-family="system-ui" font-size="16" x="50%25" y="58%25" text-anchor="middle"%3ESiamese%3C/text%3E%3C/svg%3E';
+            e.target.dataset.fallback = 'true';
+          }
+        }}
+      />
+      
       <div className={styles.header}>
         <h1 className={styles.title}>
           <FaPaw className={styles.titleIcon} />
@@ -220,31 +301,49 @@ function Home() {
         {results && (
           <div className={styles.results}>
             <div className={styles.resultCard}>
-              <h3 className={styles.resultTitle}>🐾 Likely Cause</h3>
+              <h3 className={styles.resultTitle}>
+                <FaPaw className={styles.resultIcon} />
+                Likely Cause
+              </h3>
               <p className={styles.resultText}>{results.cause}</p>
             </div>
 
             <div className={styles.resultCard}>
-              <h3 className={styles.resultTitle}>⚡ Quick Fix</h3>
+              <h3 className={styles.resultTitle}>
+                <FaLightbulb className={styles.resultIcon} />
+                Quick Fix
+              </h3>
               <p className={styles.resultText}>{results.quickFix}</p>
             </div>
 
             <div className={styles.resultCard}>
-              <h3 className={styles.resultTitle}>📋 Step-by-Step Fix</h3>
+              <h3 className={styles.resultTitle}>
+                <FaListOl className={styles.resultIcon} />
+                Step-by-Step Fix
+              </h3>
               <ul className={styles.stepsList}>
                 {results.steps.map((step, idx) => (
-                  <li key={idx}>{step}</li>
+                  <li key={idx}>
+                    <span className={styles.stepNumber}>{idx + 1}</span>
+                    {step}
+                  </li>
                 ))}
               </ul>
             </div>
 
             <div className={styles.resultCard}>
-              <h3 className={styles.resultTitle}>⚠️ Vet Warning Signs</h3>
+              <h3 className={styles.resultTitle}>
+                <FaExclamationTriangle className={styles.resultIcon} />
+                Vet Warning Signs
+              </h3>
               <p className={styles.resultText}>{results.vetWarning}</p>
             </div>
 
             <div className={styles.resultCard}>
-              <h3 className={styles.resultTitle}>🛒 Recommended Products</h3>
+              <h3 className={styles.resultTitle}>
+                <FaShoppingCart className={styles.resultIcon} />
+                Recommended Products
+              </h3>
               <ul className={styles.productsList}>
                 {results.products.map((product, idx) => (
                   <li key={idx}>
@@ -264,29 +363,42 @@ function Home() {
                           }
                         }}
                       >
+                        <FaHeart className={styles.productIcon} />
                         {product.name}
                         <span className={styles.externalLinkIcon}> ↗</span>
                       </a>
                     ) : (
-                      <span className={styles.productText}>{product.name}</span>
+                      <span className={styles.productText}>
+                        <FaHeart className={styles.productIcon} />
+                        {product.name}
+                      </span>
                     )}
                   </li>
                 ))}
               </ul>
-              {results.products.some(p => p.isAffiliateLink) && (
-                <p className={styles.affiliateDisclaimer}>
-                  * As an Amazon Associate, we earn from qualifying purchases
-                </p>
-              )}
             </div>
           </div>
         )}
       </div>
 
       <footer className={styles.footer}>
-        <Link to="/premium" className={styles.premiumLink}>
-          🐾 Go Premium — Unlimited translations
-        </Link>
+        <div className={styles.footerContent}>
+          <Link to="/premium" className={styles.premiumLink}>
+            <FaPaw />
+            Go Premium — Unlimited translations
+          </Link>
+
+          <div className={styles.copyright}>
+            <FaCopyright className={styles.copyrightIcon} />
+            <span>{new Date().getFullYear()} Pet Behavior Translator. All rights reserved.</span>
+            <span className={styles.madeWith}>
+              Made with <FaHeart className={styles.heartIcon} /> for pet lovers
+            </span>
+            <span className={styles.affiliateDisclaimer}>
+              We may earn commissions from qualifying purchases.
+            </span>
+          </div>
+        </div>
       </footer>
     </div>
   )

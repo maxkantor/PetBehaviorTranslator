@@ -1,12 +1,14 @@
 .container {
   min-height: 100vh;
   background: 
-    radial-gradient(circle at 20% 50%, rgba(255, 182, 193, 0.3) 0%, transparent 50%),
-    radial-gradient(circle at 80% 80%, rgba(255, 218, 185, 0.3) 0%, transparent 50%),
+    radial-gradient(circle at 20% 50%, rgba(255, 182, 193, 0.4) 0%, transparent 50%),
+    radial-gradient(circle at 80% 80%, rgba(255, 218, 185, 0.4) 0%, transparent 50%),
+    radial-gradient(circle at 50% 20%, rgba(139, 195, 255, 0.3) 0%, transparent 50%),
     linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  background-size: 100% 100%, 100% 100%, 100% 100%;
+  background-size: 100% 100%, 100% 100%, 100% 100%, 100% 100%;
   padding: 2rem 1rem;
   position: relative;
+  overflow-x: hidden;
 }
 
 .container::before {
@@ -17,16 +19,42 @@
   right: 0;
   bottom: 0;
   background-image: 
-    url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.05'%3E%3Cpath d='M30 20c-5.5 0-10 4.5-10 10s4.5 10 10 10 10-4.5 10-10-4.5-10-10-10zm0 2c4.4 0 8 3.6 8 8s-3.6 8-8 8-8-3.6-8-8 3.6-8 8-8zm-5 8c0-2.8 2.2-5 5-5v10c-2.8 0-5-2.2-5-5z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
-  opacity: 0.3;
+    url("data:image/svg+xml,%3Csvg width='80' height='80' viewBox='0 0 80 80' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.06'%3E%3Cpath d='M40 25c-8.3 0-15 6.7-15 15s6.7 15 15 15 15-6.7 15-15-6.7-15-15-15zm0 5c5.5 0 10 4.5 10 10s-4.5 10-10 10-10-4.5-10-10 4.5-10 10-10zM35 40c0-2.8 2.2-5 5-5v10c-2.8 0-5-2.2-5-5z'/%3E%3Cpath d='M20 15c0-2.8 2.2-5 5-5v10c-2.8 0-5-2.2-5-5z'/%3E%3Cpath d='M55 65c0-2.8 2.2-5 5-5v10c-2.8 0-5-2.2-5-5z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+  opacity: 0.4;
   pointer-events: none;
+  animation: floatBackground 20s ease-in-out infinite;
+}
+
+.container::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-image: 
+    radial-gradient(circle at 10% 30%, rgba(255, 255, 255, 0.1) 0%, transparent 20%),
+    radial-gradient(circle at 90% 70%, rgba(255, 255, 255, 0.1) 0%, transparent 20%);
+  pointer-events: none;
+}
+
+@keyframes floatBackground {
+  0%, 100% {
+    transform: translateY(0) translateX(0);
+  }
+  33% {
+    transform: translateY(-20px) translateX(10px);
+  }
+  66% {
+    transform: translateY(10px) translateX(-10px);
+  }
 }
 
 .header {
   text-align: center;
   margin-bottom: 2rem;
   position: relative;
-  z-index: 1;
+  z-index: 2;
 }
 
 .title {
@@ -69,7 +97,7 @@
   max-width: 900px;
   margin: 0 auto;
   position: relative;
-  z-index: 1;
+  z-index: 2;
 }
 
 .inputSection {
@@ -218,20 +246,40 @@
   border-left-color: #ff6b9d;
 }
 
+.resultCard:nth-child(1) .resultIcon {
+  color: #ff6b9d;
+}
+
 .resultCard:nth-child(2) {
   border-left-color: #4ecdc4;
+}
+
+.resultCard:nth-child(2) .resultIcon {
+  color: #4ecdc4;
 }
 
 .resultCard:nth-child(3) {
   border-left-color: #ffe66d;
 }
 
+.resultCard:nth-child(3) .resultIcon {
+  color: #f5a623;
+}
+
 .resultCard:nth-child(4) {
   border-left-color: #ff6b6b;
 }
 
+.resultCard:nth-child(4) .resultIcon {
+  color: #ff6b6b;
+}
+
 .resultCard:nth-child(5) {
   border-left-color: #95e1d3;
+}
+
+.resultCard:nth-child(5) .resultIcon {
+  color: #95e1d3;
 }
 
 .resultCard:hover {
@@ -244,6 +292,14 @@
   font-weight: 700;
   margin-bottom: 0.75rem;
   color: #333;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.resultIcon {
+  font-size: 1.5rem;
+  color: #ff6b9d;
 }
 
 .resultText {
@@ -258,18 +314,37 @@
 }
 
 .stepsList li {
-  padding: 0.5rem 0;
-  padding-left: 1.5rem;
+  padding: 0.75rem 0;
+  padding-left: 3rem;
   position: relative;
   font-size: 1rem;
   line-height: 1.6;
   color: #555;
+  border-left: 2px solid #e0e0e0;
+  margin-left: 1rem;
+  transition: all 0.3s ease;
 }
 
-.stepsList li::before {
-  content: '🐾';
+.stepsList li:hover {
+  border-left-color: #ff6b9d;
+  padding-left: 3.5rem;
+}
+
+.stepNumber {
   position: absolute;
-  left: 0;
+  left: -1.5rem;
+  top: 0.75rem;
+  width: 2rem;
+  height: 2rem;
+  background: linear-gradient(135deg, #ff6b9d 0%, #ff8fb3 100%);
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.9rem;
+  box-shadow: 0 2px 8px rgba(255, 107, 157, 0.3);
 }
 
 .productsList {
@@ -285,20 +360,33 @@
   color: #4ecdc4;
   text-decoration: none;
   font-weight: 600;
-  transition: color 0.3s ease;
+  transition: all 0.3s ease;
   display: inline-flex;
   align-items: center;
-  gap: 0.25rem;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 8px;
 }
 
 .productLink:hover {
   color: #44a08d;
-  text-decoration: underline;
+  background: rgba(78, 205, 196, 0.1);
+  transform: translateX(5px);
 }
 
 .productText {
   color: #555;
   font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+}
+
+.productIcon {
+  font-size: 0.9rem;
+  color: #ff6b9d;
+  opacity: 0.8;
 }
 
 .externalLinkIcon {
@@ -307,23 +395,35 @@
 }
 
 .affiliateDisclaimer {
-  margin-top: 1rem;
-  padding-top: 1rem;
-  border-top: 1px solid #e0e0e0;
-  font-size: 0.85rem;
-  color: #888;
+  font-size: 0.7rem;
+  color: rgba(255, 255, 255, 0.5);
   font-style: italic;
+  margin-top: 0.5rem;
+  opacity: 0.6;
 }
 
 .footer {
   text-align: center;
-  margin-top: 3rem;
+  margin-top: 4rem;
+  padding-top: 3rem;
   position: relative;
   z-index: 1;
+  border-top: 2px solid rgba(255, 255, 255, 0.2);
+}
+
+.footerContent {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2rem;
+  max-width: 900px;
+  margin: 0 auto;
 }
 
 .premiumLink {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
   padding: 1rem 2rem;
   background: linear-gradient(135deg, #ffe66d 0%, #ffd93d 100%);
   color: #333;
@@ -338,6 +438,114 @@
 .premiumLink:hover {
   transform: translateY(-3px);
   box-shadow: 0 8px 24px rgba(255, 230, 109, 0.5);
+}
+
+.petImage {
+  position: fixed;
+  width: 150px;
+  height: 150px;
+  object-fit: cover;
+  border-radius: 50%;
+  border: 5px solid rgba(255, 255, 255, 0.4);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+  opacity: 0.85;
+  z-index: 0;
+  animation: float 8s ease-in-out infinite;
+  pointer-events: none;
+  filter: brightness(1.1) saturate(1.2);
+}
+
+.petImage.puppy1 {
+  top: 8%;
+  left: 3%;
+  animation-delay: 0s;
+}
+
+.petImage.puppy2 {
+  bottom: 12%;
+  right: 5%;
+  animation-delay: 2.5s;
+}
+
+.petImage.kitten1 {
+  top: 15%;
+  right: 3%;
+  animation-delay: 1.2s;
+}
+
+.petImage.kitten2 {
+  bottom: 18%;
+  left: 8%;
+  animation-delay: 3.5s;
+}
+
+.petImage.puppy3 {
+  top: 60%;
+  left: 2%;
+  animation-delay: 4s;
+}
+
+.petImage.kitten3 {
+  bottom: 5%;
+  right: 12%;
+  animation-delay: 1.8s;
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0px) rotate(0deg) scale(1);
+  }
+  25% {
+    transform: translateY(-15px) rotate(3deg) scale(1.05);
+  }
+  50% {
+    transform: translateY(-25px) rotate(0deg) scale(1.1);
+  }
+  75% {
+    transform: translateY(-15px) rotate(-3deg) scale(1.05);
+  }
+}
+
+.copyright {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 0.9rem;
+  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+.copyrightIcon {
+  font-size: 0.85rem;
+  margin-right: 0.25rem;
+}
+
+.madeWith {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.8);
+  margin-top: 0.5rem;
+}
+
+.heartIcon {
+  color: #ff6b9d;
+  animation: heartbeat 1.5s ease-in-out infinite;
+  font-size: 0.9rem;
+}
+
+@keyframes heartbeat {
+  0%, 100% {
+    transform: scale(1);
+  }
+  10%, 30% {
+    transform: scale(1.1);
+  }
+  20%, 40% {
+    transform: scale(1);
+  }
 }
 
 @media (max-width: 768px) {
@@ -363,6 +571,57 @@
 
   .presetButton {
     width: 100%;
+  }
+
+  .footerContent {
+    gap: 1.5rem;
+  }
+
+  .copyright {
+    font-size: 0.8rem;
+    text-align: center;
+  }
+
+  .madeWith {
+    font-size: 0.75rem;
+  }
+
+  .petImage {
+    width: 80px;
+    height: 80px;
+    opacity: 0.6;
+  }
+
+  .petImage.puppy1 {
+    top: 5%;
+    left: 2%;
+  }
+
+  .petImage.puppy2 {
+    bottom: 10%;
+    right: 2%;
+  }
+
+  .petImage.kitten1 {
+    top: 15%;
+    right: 2%;
+  }
+
+  .petImage.kitten2 {
+    bottom: 15%;
+    left: 5%;
+  }
+
+  .stepsList li {
+    padding-left: 2.5rem;
+    margin-left: 0.5rem;
+  }
+
+  .stepNumber {
+    left: -1rem;
+    width: 1.5rem;
+    height: 1.5rem;
+    font-size: 0.75rem;
   }
 }
 
