@@ -91,6 +91,60 @@
   color: #fff;
   text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
   font-weight: 300;
+  margin-bottom: 1rem;
+}
+
+.usageDisplay {
+  margin-top: 1.5rem;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.premiumBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.5rem;
+  background: linear-gradient(135deg, #ffe66d 0%, #ffd93d 100%);
+  border-radius: 25px;
+  color: #333;
+  font-weight: 600;
+  box-shadow: 0 4px 12px rgba(255, 230, 109, 0.4);
+}
+
+.premiumBadge .crownIcon {
+  color: #ff6b9d;
+  font-size: 1.2rem;
+}
+
+.usageBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem 1.5rem;
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 25px;
+  color: #333;
+  font-weight: 600;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.upgradeLink {
+  color: #4ecdc4;
+  text-decoration: none;
+  font-weight: 700;
+  padding: 0.5rem 1rem;
+  border-radius: 12px;
+  background: rgba(78, 205, 196, 0.1);
+  transition: all 0.3s ease;
+}
+
+.upgradeLink:hover {
+  background: rgba(78, 205, 196, 0.2);
+  transform: translateY(-2px);
 }
 
 .content {
@@ -420,6 +474,13 @@
   margin: 0 auto;
 }
 
+.footerLinks {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
 .premiumLink {
   display: inline-flex;
   align-items: center;
@@ -438,6 +499,26 @@
 .premiumLink:hover {
   transform: translateY(-3px);
   box-shadow: 0 8px 24px rgba(255, 230, 109, 0.5);
+}
+
+.supportLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem 2rem;
+  background: linear-gradient(135deg, #4ecdc4 0%, #44a08d 100%);
+  color: white;
+  text-decoration: none;
+  border-radius: 12px;
+  font-weight: 700;
+  font-size: 1.1rem;
+  box-shadow: 0 6px 20px rgba(78, 205, 196, 0.4);
+  transition: all 0.3s ease;
+}
+
+.supportLink:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 24px rgba(78, 205, 196, 0.5);
 }
 
 .petImage {

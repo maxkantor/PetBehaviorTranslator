@@ -26,20 +26,29 @@ function Premium() {
         </div>
         <h1 className={styles.title}>Go Premium</h1>
         <p className={styles.subtitle}>
-          Unlimited behavior translations — coming soon!
+          Get unlimited translations, priority support, and advanced analysis!
         </p>
         <div className={styles.features}>
           <div className={styles.feature}>
             <FaPaw className={styles.featureIcon} />
-            <p>Unlimited translations</p>
+            <div>
+              <p><strong>Unlimited translations</strong></p>
+              <p className={styles.featureDesc}>No daily limits - translate as much as you need</p>
+            </div>
           </div>
           <div className={styles.feature}>
             <FaPaw className={styles.featureIcon} />
-            <p>Priority support</p>
+            <div>
+              <p><strong>Priority support</strong></p>
+              <p className={styles.featureDesc}>24-hour response time vs 48 hours for free users</p>
+            </div>
           </div>
           <div className={styles.feature}>
             <FaPaw className={styles.featureIcon} />
-            <p>Advanced behavior analysis</p>
+            <div>
+              <p><strong>Advanced behavior analysis</strong></p>
+              <p className={styles.featureDesc}>Detailed insights, prevention tips, and expert recommendations</p>
+            </div>
           </div>
         </div>
         <Link to="/" className={styles.backButton}>

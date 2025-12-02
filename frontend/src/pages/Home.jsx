@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
-import { FaPaw, FaBone, FaCat, FaDog, FaHeart, FaLightbulb, FaListOl, FaExclamationTriangle, FaShoppingCart, FaCopyright } from 'react-icons/fa'
+import { FaPaw, FaBone, FaCat, FaDog, FaHeart, FaLightbulb, FaListOl, FaExclamationTriangle, FaShoppingCart, FaCopyright, FaCrown, FaHeadset } from 'react-icons/fa'
 import { Link } from 'react-router-dom'
 import axios from 'axios'
+import { getUserId, getUsage, canTranslate } from '../services/premiumService'
 import styles from './Home.module.css'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001'
@@ -19,10 +20,34 @@ function Home() {
   const [results, setResults] = useState(null)
   const [error, setError] = useState(null)
   const [retryAfterSeconds, setRetryAfterSeconds] = useState(null)
+  const [usage, setUsage] = useState({ dailyCount: 0, isPremium: false, dailyLimit: 5, remaining: 5 })
+  const [loadingUsage, setLoadingUsage] = useState(true)
+
+  // Load usage on component mount
+  useEffect(() => {
+    const loadUsage = async () => {
+      try {
+        const usageData = await getUsage()
+        setUsage(usageData)
+      } catch (error) {
+        console.error('Error loading usage:', error)
+      } finally {
+        setLoadingUsage(false)
+      }
+    }
+    loadUsage()
+  }, [])
 
   const handleTranslate = async () => {
     if (!behavior.trim()) {
       setError('Please describe your pet\'s behavior')
+      return
+    }
+
+    // Check if user can translate
+    const canProceed = await canTranslate()
+    if (!canProceed) {
+      setError('Daily limit reached! Upgrade to Premium for unlimited translations.')
       return
     }
 
@@ -31,18 +56,31 @@ function Home() {
     setResults(null)
 
     try {
+      const userId = getUserId()
       const response = await axios.post(`${API_URL}/api/translate`, {
-        behavior: behavior.trim()
+        behavior: behavior.trim(),
+        userId: userId
       })
       setResults(response.data)
       setError(null)
       setRetryAfterSeconds(null)
+      
+      // Refresh usage after successful translation
+      const updatedUsage = await getUsage()
+      setUsage(updatedUsage)
     } catch (err) {
       const errorMessage = err.response?.data?.detail 
         || err.response?.data?.message 
         || err.message 
         || 'Failed to translate behavior. Please try again.'
       setError(errorMessage)
+      
+      // Check if it's a daily limit error
+      if (err.response?.status === 429 && err.response?.data?.extensions?.upgradeRequired) {
+        // Refresh usage
+        const updatedUsage = await getUsage()
+        setUsage(updatedUsage)
+      }
       
       // Extract retry-after information if available
       if (err.response?.status === 429 && err.response?.data?.extensions?.retryAfterSeconds) {
@@ -177,6 +215,33 @@ function Home() {
         <p className={styles.subtitle}>
           Type what your pet is doing — get instant answers.
         </p>
+        
+        {/* Usage Display */}
+        {!loadingUsage && (
+          <div className={styles.usageDisplay}>
+            {usage.isPremium ? (
+              <div className={styles.premiumBadge}>
+                <FaCrown className={styles.crownIcon} />
+                <span>Premium Member - Unlimited Translations</span>
+              </div>
+            ) : (
+              <div className={styles.usageBadge}>
+                <span>
+                  {usage.remaining > 0 ? (
+                    <>
+                      <strong>{usage.remaining}</strong> translation{usage.remaining !== 1 ? 's' : ''} remaining today
+                    </>
+                  ) : (
+                    <>Daily limit reached</>
+                  )}
+                </span>
+                <Link to="/premium" className={styles.upgradeLink}>
+                  Upgrade to Premium
+                </Link>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       <div className={styles.content}>
@@ -377,16 +442,44 @@ function Home() {
                 ))}
               </ul>
             </div>
+
+            {/* Premium Features: Advanced Insights */}
+            {results.isPremium && results.advancedInsights && (
+              <div className={styles.resultCard}>
+                <h3 className={styles.resultTitle}>
+                  <FaCrown className={styles.resultIcon} />
+                  Advanced Insights
+                </h3>
+                <p className={styles.resultText}>{results.advancedInsights}</p>
+              </div>
+            )}
+
+            {/* Premium Features: Prevention Tips */}
+            {results.isPremium && results.preventionTips && (
+              <div className={styles.resultCard}>
+                <h3 className={styles.resultTitle}>
+                  <FaPaw className={styles.resultIcon} />
+                  Prevention Tips
+                </h3>
+                <p className={styles.resultText}>{results.preventionTips}</p>
+              </div>
+            )}
           </div>
         )}
       </div>
 
       <footer className={styles.footer}>
         <div className={styles.footerContent}>
-          <Link to="/premium" className={styles.premiumLink}>
-            <FaPaw />
-            Go Premium — Unlimited translations
-          </Link>
+          <div className={styles.footerLinks}>
+            <Link to="/premium" className={styles.premiumLink}>
+              <FaPaw />
+              Go Premium — Unlimited translations
+            </Link>
+            <Link to="/support" className={styles.supportLink}>
+              <FaHeadset />
+              Contact Support
+            </Link>
+          </div>
 
           <div className={styles.copyright}>
             <FaCopyright className={styles.copyrightIcon} />

@@ -1,0 +1,63 @@
+👑 BECOME ADMIN - SIMPLE INSTRUCTIONS
+=====================================
+
+EASIEST METHOD (No Browser Console):
+-------------------------------------
+
+1. Open PowerShell in this folder
+
+2. Run this command:
+   powershell -ExecutionPolicy Bypass -File set-admin.ps1
+
+3. When asked for User ID:
+   - Option A: Press Enter (uses "admin")
+   - Option B: Get your ID first:
+     * Open http://localhost:3000
+     * Press F12
+     * Type: localStorage.getItem('petBehaviorUserId')
+     * Copy the result and paste when prompted
+
+4. Refresh your browser at http://localhost:3000
+
+5. Done! You're now admin with unlimited translations.
+
+
+ALTERNATIVE - DIRECT URL:
+-------------------------
+
+1. Get your User ID:
+   - Open http://localhost:3000
+   - Press F12
+   - Type: localStorage.getItem('petBehaviorUserId')
+   - Copy it (e.g., user_1234567890_abc123)
+
+2. Open this URL in browser (replace YOUR_ID):
+   http://localhost:5001/api/admin/set-premium/YOUR_ID
+
+3. You'll see: {"success":true,"isPremium":true,...}
+
+4. Refresh http://localhost:3000
+
+That's it! 🎉
+
+
+REVERT TO NORMAL USER:
+----------------------
+
+1. Run PowerShell script:
+   powershell -ExecutionPolicy Bypass -File set-admin.ps1
+   Choose option 2 (Remove Premium)
+
+2. Or use direct URL:
+   http://localhost:5001/api/admin/remove-premium/YOUR_USER_ID
+
+3. Refresh browser - you're back to free tier (5/day limit)
+
+
+QUICK REFERENCE:
+----------------
+PowerShell Script: set-admin.ps1
+Set Premium: http://localhost:5001/api/admin/set-premium/{userId}
+Remove Premium: http://localhost:5001/api/admin/remove-premium/{userId}
+View All Users: http://localhost:5001/api/admin/users
+

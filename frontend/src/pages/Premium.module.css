@@ -91,20 +91,29 @@
 
 .feature {
   display: flex;
-  align-items: center;
-  justify-content: center;
+  align-items: flex-start;
   gap: 1rem;
-  padding: 1rem;
+  padding: 1.5rem;
   background: rgba(255, 230, 109, 0.2);
   border-radius: 12px;
   font-size: 1.1rem;
   color: #555;
-  font-weight: 600;
+  text-align: left;
 }
 
 .featureIcon {
   color: #ff6b9d;
   font-size: 1.5rem;
+  flex-shrink: 0;
+  margin-top: 0.25rem;
+}
+
+.featureDesc {
+  font-size: 0.9rem;
+  color: #777;
+  margin-top: 0.5rem;
+  font-weight: 400;
+  line-height: 1.5;
 }
 
 .backButton {
