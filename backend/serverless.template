@@ -1,0 +1,60 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Transform": "AWS::Serverless-2016-10-31",
+  "Description": "Pet Behavior Translator API",
+  "Globals": {
+    "Api": {
+      "Cors": {
+        "AllowMethods": "'*'",
+        "AllowHeaders": "'*'",
+        "AllowOrigin": "'*'"
+      }
+    }
+  },
+  "Resources": {
+    "PetBehaviorTranslatorApi": {
+      "Type": "AWS::Serverless::Function",
+      "Properties": {
+        "Handler": "PetBehaviorTranslator::PetBehaviorTranslator.LambdaEntryPoint::FunctionHandlerAsync",
+        "Runtime": "provided.al2",
+        "CodeUri": "",
+        "MemorySize": 512,
+        "Timeout": 30,
+        "Environment": {
+          "Variables": {
+            "OPENAI_API_KEY": {
+              "Ref": "OpenAIApiKey"
+            }
+          }
+        },
+        "Events": {
+          "ApiEvent": {
+            "Type": "Api",
+            "Properties": {
+              "Path": "/{proxy+}",
+              "Method": "ANY"
+            }
+          }
+        }
+      }
+    }
+  },
+  "Parameters": {
+    "OpenAIApiKey": {
+      "Type": "String",
+      "Description": "OpenAI API Key",
+      "NoEcho": true
+    }
+  },
+  "Outputs": {
+    "ApiUrl": {
+      "Description": "API endpoint URL",
+      "Value": {
+        "Fn::Sub": "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/"
+      }
+    }
+  }
+}
+
+
+
