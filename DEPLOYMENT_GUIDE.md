@@ -58,6 +58,7 @@ git push origin master
    - Go to App settings → Environment variables
    - Add: `VITE_API_URL` = `https://your-api-url.amazonaws.com/Prod`
      - (You'll update this after deploying backend)
+   - ⚠️ **DO NOT add OPENAI_API_KEY here** - that goes in Lambda only!
 
 5. **Deploy:**
    - Click "Save and deploy"
@@ -224,13 +225,14 @@ SUPPORT_EMAIL=support@yourdomain.com
 
 ### Frontend (Amplify):
 - Environment variable: `VITE_API_URL` = Your API Gateway URL
+- ⚠️ **ONLY** `VITE_API_URL` - no API keys here!
 
 ### Backend (Lambda):
 - Environment variables:
-  - `OPENAI_API_KEY`
+  - `OPENAI_API_KEY` ⬅️ **This goes here, NOT in Amplify!**
   - `AMAZON_ASSOCIATE_TAG`
   - `SMTP_HOST`, `SMTP_USERNAME`, `SMTP_PASSWORD`
-  - `SUPPORT_EMAIL`
+  - `SUPPORT_EMAIL`, `ADMIN_EMAIL`
 
 ---
 
