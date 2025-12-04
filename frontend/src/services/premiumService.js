@@ -1,6 +1,6 @@
 import axios from 'axios'
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001'
+const API_URL = import.meta.env.VITE_API_URL || 'https://op6tatj304.execute-api.us-east-1.amazonaws.com/Prod'
 
 // Generate a unique user ID (stored in localStorage)
 export const getUserId = () => {

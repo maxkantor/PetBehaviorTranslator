@@ -5,7 +5,7 @@ import { getUserId, isPremium } from '../services/premiumService'
 import axios from 'axios'
 import styles from './Support.module.css'
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001'
+const API_URL = import.meta.env.VITE_API_URL || 'https://op6tatj304.execute-api.us-east-1.amazonaws.com/Prod'
 
 function Support() {
   const [email, setEmail] = useState('')
