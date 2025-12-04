@@ -42,7 +42,7 @@
   padding: 3rem;
   text-align: center;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
-  max-width: 600px;
+  max-width: 1000px;
   width: 100%;
   position: relative;
   z-index: 2;
@@ -134,6 +134,199 @@
 .backButton:hover {
   transform: translateY(-3px);
   box-shadow: 0 8px 24px rgba(78, 205, 196, 0.5);
+}
+
+/* Message Alert */
+.message {
+  margin: 20px 0;
+  padding: 15px 20px;
+  border-radius: 10px;
+  text-align: center;
+  font-weight: 500;
+  animation: slideIn 0.3s ease-out;
+}
+
+.message.success {
+  background: #d4edda;
+  color: #155724;
+  border: 1px solid #c3e6cb;
+}
+
+.message.error {
+  background: #f8d7da;
+  color: #721c24;
+  border: 1px solid #f5c6cb;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Pricing Section */
+.pricingSection {
+  margin: 3rem 0;
+}
+
+.pricingTitle {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #333;
+  margin-bottom: 2rem;
+}
+
+.pricingGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 2rem;
+  margin-bottom: 2rem;
+}
+
+.pricingCard {
+  background: white;
+  border: 2px solid #e0e0e0;
+  border-radius: 15px;
+  padding: 2rem;
+  position: relative;
+  transition: all 0.3s;
+  display: flex;
+  flex-direction: column;
+}
+
+.pricingCard:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+}
+
+.popularCard {
+  border-color: #ffe66d;
+  border-width: 3px;
+  background: linear-gradient(135deg, rgba(255, 230, 109, 0.1) 0%, rgba(255, 230, 109, 0.05) 100%);
+}
+
+.popularBadge {
+  position: absolute;
+  top: -15px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: linear-gradient(135deg, #ffe66d 0%, #ffd93d 100%);
+  color: #333;
+  padding: 5px 15px;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  box-shadow: 0 4px 10px rgba(255, 230, 109, 0.4);
+}
+
+.savingsBadge {
+  position: absolute;
+  top: 15px;
+  right: 15px;
+  background: #ff6b9d;
+  color: white;
+  padding: 5px 12px;
+  border-radius: 15px;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.planName {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #333;
+  margin-bottom: 1rem;
+  margin-top: 0.5rem;
+}
+
+.planPrice {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  margin-bottom: 1rem;
+}
+
+.price {
+  font-size: 2.5rem;
+  font-weight: 800;
+  color: #667eea;
+}
+
+.period {
+  font-size: 1rem;
+  color: #666;
+  margin-left: 0.5rem;
+}
+
+.planDescription {
+  color: #666;
+  margin-bottom: 2rem;
+  font-size: 0.95rem;
+  flex-grow: 1;
+}
+
+.purchaseButton {
+  width: 100%;
+  padding: 15px 25px;
+  border: none;
+  border-radius: 10px;
+  font-size: 1.1rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.3s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+}
+
+.purchaseButton:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+}
+
+.purchaseButton:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.popularButton {
+  background: linear-gradient(135deg, #ffe66d 0%, #ffd93d 100%);
+  color: #333;
+}
+
+.popularButton:hover:not(:disabled) {
+  box-shadow: 0 5px 15px rgba(255, 230, 109, 0.5);
+}
+
+.spinning {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.securePayment {
+  text-align: center;
+  color: #666;
+  font-size: 0.9rem;
+  margin-top: 1rem;
 }
 
 .footer {

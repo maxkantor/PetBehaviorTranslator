@@ -1,0 +1,195 @@
+.container {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  padding: 2rem;
+}
+
+.content {
+  background: white;
+  border-radius: 20px;
+  padding: 3rem;
+  text-align: center;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+  max-width: 600px;
+  width: 100%;
+}
+
+.spinner {
+  width: 60px;
+  height: 60px;
+  border: 5px solid #f3f3f3;
+  border-top: 5px solid #667eea;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin: 0 auto 2rem;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.iconContainer {
+  margin-bottom: 2rem;
+}
+
+.successIcon {
+  font-size: 5rem;
+  color: #28a745;
+  animation: scaleIn 0.5s ease-out;
+}
+
+.errorIcon {
+  font-size: 5rem;
+  animation: scaleIn 0.5s ease-out;
+}
+
+@keyframes scaleIn {
+  from {
+    transform: scale(0);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.title {
+  font-size: 2.5rem;
+  font-weight: 800;
+  color: #333;
+  margin-bottom: 1rem;
+}
+
+.message {
+  font-size: 1.2rem;
+  color: #666;
+  margin-bottom: 2rem;
+}
+
+.errorMessage {
+  font-size: 1.1rem;
+  color: #dc3545;
+  margin-bottom: 2rem;
+}
+
+.planInfo {
+  background: linear-gradient(135deg, rgba(255, 230, 109, 0.2) 0%, rgba(255, 230, 109, 0.1) 100%);
+  border-radius: 15px;
+  padding: 2rem;
+  margin: 2rem 0;
+}
+
+.crownIcon {
+  font-size: 3rem;
+  color: #ffe66d;
+  margin-bottom: 1rem;
+}
+
+.planInfo h2 {
+  font-size: 1.8rem;
+  color: #333;
+  margin-bottom: 0.5rem;
+}
+
+.expiryInfo {
+  color: #666;
+  font-size: 1rem;
+}
+
+.lifetimeInfo {
+  color: #667eea;
+  font-size: 1.2rem;
+  font-weight: 600;
+}
+
+.features {
+  text-align: left;
+  margin: 2rem 0;
+  padding: 2rem;
+  background: #f8f9fa;
+  border-radius: 15px;
+}
+
+.features h3 {
+  font-size: 1.3rem;
+  color: #333;
+  margin-bottom: 1rem;
+  text-align: center;
+}
+
+.features ul {
+  list-style: none;
+  padding: 0;
+}
+
+.features li {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem 0;
+  font-size: 1.1rem;
+  color: #555;
+}
+
+.features li svg {
+  color: #ff6b9d;
+  font-size: 1.2rem;
+}
+
+.homeButton, .retryButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem 2rem;
+  background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+  color: white;
+  text-decoration: none;
+  border-radius: 12px;
+  font-weight: 700;
+  font-size: 1.1rem;
+  box-shadow: 0 6px 20px rgba(40, 167, 69, 0.4);
+  transition: all 0.3s ease;
+  margin-top: 1rem;
+}
+
+.homeButton:hover, .retryButton:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 24px rgba(40, 167, 69, 0.5);
+}
+
+.retryButton {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+}
+
+.retryButton:hover {
+  box-shadow: 0 8px 24px rgba(102, 126, 234, 0.5);
+}
+
+@media (max-width: 768px) {
+  .content {
+    padding: 2rem;
+  }
+
+  .title {
+    font-size: 2rem;
+  }
+
+  .message {
+    font-size: 1rem;
+  }
+
+  .features {
+    padding: 1.5rem;
+  }
+
+  .features li {
+    font-size: 1rem;
+  }
+}
+

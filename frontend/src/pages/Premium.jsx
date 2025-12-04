@@ -1,8 +1,71 @@
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { FaPaw, FaCrown, FaCopyright, FaHeart } from 'react-icons/fa'
+import { FaPaw, FaCrown, FaCopyright, FaHeart, FaCheck, FaSpinner } from 'react-icons/fa'
+import axios from 'axios'
+import { getUserId } from '../services/premiumService'
 import styles from './Premium.module.css'
 
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001'
+
 function Premium() {
+  const [loading, setLoading] = useState(false)
+  const [selectedPlan, setSelectedPlan] = useState(null)
+  const [message, setMessage] = useState('')
+  const [messageType, setMessageType] = useState('')
+
+  const plans = [
+    {
+      id: 'monthly',
+      name: 'Monthly',
+      price: '$9.99',
+      period: '/month',
+      description: 'Perfect for trying out premium features',
+      popular: false
+    },
+    {
+      id: 'yearly',
+      name: 'Yearly',
+      price: '$99.99',
+      period: '/year',
+      description: 'Best value - Save $20!',
+      popular: true,
+      savings: 'Save 17%'
+    },
+    {
+      id: 'lifetime',
+      name: 'Lifetime',
+      price: '$199.99',
+      period: 'one-time',
+      description: 'Pay once, use forever',
+      popular: false
+    }
+  ]
+
+  const handlePurchase = async (planId) => {
+    setLoading(true)
+    setSelectedPlan(planId)
+    setMessage('')
+    
+    try {
+      const userId = getUserId()
+      const response = await axios.post(`${API_URL}/api/payment/create-checkout`, {
+        userId,
+        planId
+      })
+      
+      if (response.data.checkoutUrl) {
+        // Redirect to Stripe checkout
+        window.location.href = response.data.checkoutUrl
+      }
+    } catch (error) {
+      console.error('Payment error:', error)
+      setMessage(error.response?.data?.message || 'Failed to initiate payment. Please try again.')
+      setMessageType('error')
+      setLoading(false)
+      setSelectedPlan(null)
+    }
+  }
+
   return (
     <div className={styles.container}>
       {/* Decorative Pet Images */}
@@ -28,6 +91,15 @@ function Premium() {
         <p className={styles.subtitle}>
           Get unlimited translations, priority support, and advanced analysis!
         </p>
+
+        {/* Message Alert */}
+        {message && (
+          <div className={`${styles.message} ${styles[messageType]}`}>
+            {message}
+          </div>
+        )}
+
+        {/* Features */}
         <div className={styles.features}>
           <div className={styles.feature}>
             <FaPaw className={styles.featureIcon} />
@@ -51,6 +123,53 @@ function Premium() {
             </div>
           </div>
         </div>
+
+        {/* Pricing Plans */}
+        <div className={styles.pricingSection}>
+          <h2 className={styles.pricingTitle}>Choose Your Plan</h2>
+          <div className={styles.pricingGrid}>
+            {plans.map((plan) => (
+              <div 
+                key={plan.id} 
+                className={`${styles.pricingCard} ${plan.popular ? styles.popularCard : ''}`}
+              >
+                {plan.popular && (
+                  <div className={styles.popularBadge}>
+                    <FaCrown /> Most Popular
+                  </div>
+                )}
+                {plan.savings && (
+                  <div className={styles.savingsBadge}>{plan.savings}</div>
+                )}
+                <h3 className={styles.planName}>{plan.name}</h3>
+                <div className={styles.planPrice}>
+                  <span className={styles.price}>{plan.price}</span>
+                  <span className={styles.period}>{plan.period}</span>
+                </div>
+                <p className={styles.planDescription}>{plan.description}</p>
+                <button
+                  onClick={() => handlePurchase(plan.id)}
+                  disabled={loading}
+                  className={`${styles.purchaseButton} ${plan.popular ? styles.popularButton : ''}`}
+                >
+                  {loading && selectedPlan === plan.id ? (
+                    <>
+                      <FaSpinner className={styles.spinning} /> Processing...
+                    </>
+                  ) : (
+                    <>
+                      <FaCheck /> Get {plan.name}
+                    </>
+                  )}
+                </button>
+              </div>
+            ))}
+          </div>
+          <p className={styles.securePayment}>
+            🔒 Secure payment powered by Stripe
+          </p>
+        </div>
+
         <Link to="/" className={styles.backButton}>
           <FaPaw />
           Back to Translator

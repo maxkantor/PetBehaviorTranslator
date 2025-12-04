@@ -281,6 +281,104 @@ app.MapGet("/api/support/tickets/{userId}", (string userId) =>
 .WithName("GetUserTickets")
 .WithOpenApi();
 
+// Payment endpoints
+app.MapPost("/api/payment/create-checkout", (PaymentRequest request) =>
+{
+    if (string.IsNullOrWhiteSpace(request.UserId) || string.IsNullOrWhiteSpace(request.PlanId))
+    {
+        return Results.BadRequest(new { message = "UserId and PlanId are required" });
+    }
+    
+    // Define pricing plans
+    var plans = new Dictionary<string, (decimal price, string name, int durationDays)>
+    {
+        { "monthly", (9.99m, "Monthly Premium", 30) },
+        { "yearly", (99.99m, "Yearly Premium", 365) },
+        { "lifetime", (199.99m, "Lifetime Premium", 36500) } // 100 years
+    };
+    
+    if (!plans.ContainsKey(request.PlanId))
+    {
+        return Results.BadRequest(new { message = "Invalid plan ID" });
+    }
+    
+    var (price, name, durationDays) = plans[request.PlanId];
+    
+    // In production, integrate with Stripe here
+    // For now, create a mock checkout URL with success/cancel callbacks
+    var baseUrl = Environment.GetEnvironmentVariable("FRONTEND_URL") ?? "https://www.petbehaviortranslator.com";
+    var successUrl = $"{baseUrl}/payment/success?userId={request.UserId}&planId={request.PlanId}";
+    var cancelUrl = $"{baseUrl}/premium";
+    
+    // For demo: return a mock checkout URL
+    // In production, use Stripe Checkout API
+    return Results.Ok(new
+    {
+        checkoutUrl = $"{baseUrl}/payment/mock-checkout?userId={request.UserId}&planId={request.PlanId}&price={price}&name={Uri.EscapeDataString(name)}&success={Uri.EscapeDataString(successUrl)}&cancel={Uri.EscapeDataString(cancelUrl)}"
+    });
+})
+.WithName("CreateCheckout")
+.WithOpenApi();
+
+app.MapPost("/api/payment/webhook", async (HttpContext context) =>
+{
+    // In production, verify Stripe webhook signature
+    // For now, handle mock payment completion
+    
+    using var reader = new StreamReader(context.Request.Body);
+    var body = await reader.ReadToEndAsync();
+    
+    // Parse webhook data (in production, use Stripe library)
+    // For demo purposes, just return success
+    
+    return Results.Ok(new { received = true });
+})
+.WithName("PaymentWebhook")
+.WithOpenApi();
+
+app.MapPost("/api/payment/complete", (PaymentCompleteRequest request) =>
+{
+    if (string.IsNullOrWhiteSpace(request.UserId) || string.IsNullOrWhiteSpace(request.PlanId))
+    {
+        return Results.BadRequest(new { message = "UserId and PlanId are required" });
+    }
+    
+    // Define plan durations
+    var planDurations = new Dictionary<string, int>
+    {
+        { "monthly", 30 },
+        { "yearly", 365 },
+        { "lifetime", 36500 }
+    };
+    
+    if (!planDurations.ContainsKey(request.PlanId))
+    {
+        return Results.BadRequest(new { message = "Invalid plan ID" });
+    }
+    
+    // Grant premium access
+    if (!usageTracker.ContainsKey(request.UserId))
+    {
+        usageTracker[request.UserId] = new UserUsage { UserId = request.UserId };
+    }
+    
+    var usage = usageTracker[request.UserId];
+    usage.IsPremium = true;
+    usage.PremiumExpiresAt = DateTime.UtcNow.AddDays(planDurations[request.PlanId]);
+    usage.DailyCount = 0;
+    
+    return Results.Ok(new
+    {
+        success = true,
+        isPremium = true,
+        message = "Payment successful! Premium access granted.",
+        expiresAt = usage.PremiumExpiresAt,
+        planId = request.PlanId
+    });
+})
+.WithName("CompletePayment")
+.WithOpenApi();
+
 // Translate endpoint
 app.MapPost("/api/translate", async (TranslateRequest request) =>
 {
@@ -742,6 +840,10 @@ public record TranslateRequest(string Behavior, string? UserId = null);
 public record PremiumStatusRequest(string UserId, bool IsPremium, DateTime? ExpiresAt = null);
 
 public record SupportRequest(string? UserId, string? Email, string? Subject, string Message);
+
+public record PaymentRequest(string UserId, string PlanId);
+
+public record PaymentCompleteRequest(string UserId, string PlanId, string? TransactionId = null);
 
 public class SupportTicket
 {
