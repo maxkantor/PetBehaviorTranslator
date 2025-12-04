@@ -462,7 +462,6 @@
   padding-top: 3rem;
   position: relative;
   z-index: 1;
-  border-top: 2px solid rgba(255, 255, 255, 0.2);
 }
 
 .footerContent {
