@@ -5,7 +5,7 @@ import axios from 'axios'
 import { getUserId, getUsage, canTranslate } from '../services/premiumService'
 import styles from './Home.module.css'
 
-const API_URL = import.meta.env.VITE_API_URL || 'https://op6tatj304.execute-api.us-east-1.amazonaws.com/Prod'
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001'
 
 const presetBehaviors = [
   { text: 'Barking at night', icon: <FaDog /> },
