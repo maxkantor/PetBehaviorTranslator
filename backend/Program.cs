@@ -6,9 +6,6 @@ using System.Net;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add AWS Lambda hosting support
-builder.Services.AddAWSLambdaHosting(LambdaEventSource.RestApi);
-
 // Add services
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
