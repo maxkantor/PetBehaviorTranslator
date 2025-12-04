@@ -6,18 +6,14 @@ using System.Net;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Add AWS Lambda support for Function URLs (HTTP API format)
+builder.Services.AddAWSLambdaHosting(LambdaEventSource.HttpApi);
+
 // Add services
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
-builder.Services.AddCors(options =>
-{
-    options.AddPolicy("AllowAll", policy =>
-    {
-        policy.AllowAnyOrigin()
-              .AllowAnyMethod()
-              .AllowAnyHeader();
-    });
-});
+// CORS is handled by Lambda Function URL configuration
+// No need to add CORS here
 
 var app = builder.Build();
 
@@ -28,7 +24,7 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-app.UseCors("AllowAll");
+// CORS is handled by Lambda Function URL - don't add it here
 
 // Get OpenAI API key from environment variable
 var openAiApiKey = Environment.GetEnvironmentVariable("OPENAI_API_KEY") 

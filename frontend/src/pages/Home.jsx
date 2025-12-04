@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { FaPaw, FaBone, FaCat, FaDog, FaHeart, FaLightbulb, FaListOl, FaExclamationTriangle, FaShoppingCart, FaCopyright, FaCrown, FaHeadset } from 'react-icons/fa'
+import { FaPaw, FaBone, FaCat, FaDog, FaHeart, FaLightbulb, FaListOl, FaExclamationTriangle, FaShoppingCart, FaCopyright, FaCrown, FaHeadset, FaUserShield } from 'react-icons/fa'
 import { Link } from 'react-router-dom'
 import axios from 'axios'
 import { getUserId, getUsage, canTranslate } from '../services/premiumService'
@@ -478,6 +478,10 @@ function Home() {
             <Link to="/support" className={styles.supportLink}>
               <FaHeadset />
               Contact Support
+            </Link>
+            <Link to="/admin" className={styles.adminLink}>
+              <FaPaw />
+              Admin Dashboard
             </Link>
           </div>
 
