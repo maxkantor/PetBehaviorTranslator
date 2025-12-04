@@ -6,6 +6,9 @@ using System.Net;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Add AWS Lambda hosting support
+builder.Services.AddAWSLambdaHosting(LambdaEventSource.RestApi);
+
 // Add services
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
@@ -730,7 +733,15 @@ Respond at: {supportEmail}",
     }
 }
 
-app.Run();
+// Support running on AWS Lambda
+if (app.Environment.EnvironmentName == "Production")
+{
+    app.Run();
+}
+else
+{
+    app.Run();
+}
 
 // Request/Response models
 public record TranslateRequest(string Behavior, string? UserId = null);

@@ -24,6 +24,27 @@
           "Variables": {
             "OPENAI_API_KEY": {
               "Ref": "OpenAIApiKey"
+            },
+            "AMAZON_ASSOCIATE_TAG": {
+              "Ref": "AmazonAssociateTag"
+            },
+            "SMTP_HOST": {
+              "Ref": "SmtpHost"
+            },
+            "SMTP_PORT": {
+              "Ref": "SmtpPort"
+            },
+            "SMTP_USERNAME": {
+              "Ref": "SmtpUsername"
+            },
+            "SMTP_PASSWORD": {
+              "Ref": "SmtpPassword"
+            },
+            "SUPPORT_EMAIL": {
+              "Ref": "SupportEmail"
+            },
+            "ADMIN_EMAIL": {
+              "Ref": "AdminEmail"
             }
           }
         },
@@ -44,6 +65,42 @@
       "Type": "String",
       "Description": "OpenAI API Key",
       "NoEcho": true
+    },
+    "AmazonAssociateTag": {
+      "Type": "String",
+      "Description": "Amazon Associates Tag (optional)",
+      "Default": ""
+    },
+    "SmtpHost": {
+      "Type": "String",
+      "Description": "SMTP Host for email (optional)",
+      "Default": ""
+    },
+    "SmtpPort": {
+      "Type": "Number",
+      "Description": "SMTP Port (default: 587)",
+      "Default": "587"
+    },
+    "SmtpUsername": {
+      "Type": "String",
+      "Description": "SMTP Username (optional)",
+      "Default": ""
+    },
+    "SmtpPassword": {
+      "Type": "String",
+      "Description": "SMTP Password (optional)",
+      "NoEcho": true,
+      "Default": ""
+    },
+    "SupportEmail": {
+      "Type": "String",
+      "Description": "Support Email Address",
+      "Default": "support@yourdomain.com"
+    },
+    "AdminEmail": {
+      "Type": "String",
+      "Description": "Admin Email Address (optional)",
+      "Default": ""
     }
   },
   "Outputs": {

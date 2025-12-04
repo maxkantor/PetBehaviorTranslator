@@ -1,0 +1,77 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Pet Behavior Translator API
+
+Globals:
+  Api:
+    Cors:
+      AllowMethods: "'*'"
+      AllowHeaders: "'*'"
+      AllowOrigin: "'*'"
+
+Resources:
+  PetBehaviorTranslatorApi:
+    Type: AWS::Serverless::Function
+    Properties:
+      Runtime: dotnet8
+      Handler: PetBehaviorTranslator
+      CodeUri: .
+      MemorySize: 512
+      Timeout: 30
+      Environment:
+        Variables:
+          OPENAI_API_KEY: !Ref OpenAIApiKey
+          AMAZON_ASSOCIATE_TAG: !Ref AmazonAssociateTag
+          SMTP_HOST: !Ref SmtpHost
+          SMTP_PORT: !Ref SmtpPort
+          SMTP_USERNAME: !Ref SmtpUsername
+          SMTP_PASSWORD: !Ref SmtpPassword
+          SUPPORT_EMAIL: !Ref SupportEmail
+          ADMIN_EMAIL: !Ref AdminEmail
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            Path: /{proxy+}
+            Method: ANY
+
+Parameters:
+  OpenAIApiKey:
+    Type: String
+    Description: OpenAI API Key
+    NoEcho: true
+  AmazonAssociateTag:
+    Type: String
+    Description: Amazon Associates Tag (optional)
+    Default: ""
+  SmtpHost:
+    Type: String
+    Description: SMTP Host for email (optional)
+    Default: ""
+  SmtpPort:
+    Type: Number
+    Description: "SMTP Port (default: 587)"
+    Default: 587
+  SmtpUsername:
+    Type: String
+    Description: SMTP Username (optional)
+    Default: ""
+  SmtpPassword:
+    Type: String
+    Description: SMTP Password (optional)
+    NoEcho: true
+    Default: ""
+  SupportEmail:
+    Type: String
+    Description: Support Email Address
+    Default: "support@yourdomain.com"
+  AdminEmail:
+    Type: String
+    Description: Admin Email Address (optional)
+    Default: ""
+
+Outputs:
+  ApiUrl:
+    Description: API endpoint URL
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/"
+

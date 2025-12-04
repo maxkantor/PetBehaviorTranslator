@@ -1,0 +1,18 @@
+FROM public.ecr.aws/lambda/provided:al2
+
+# Install .NET 8 runtime
+RUN yum update -y && \
+    yum install -y tar gzip && \
+    curl -sSL https://dot.net/v1/dotnet-install.sh | bash /dev/stdin --channel 8.0 --install-dir /usr/share/dotnet && \
+    ln -s /usr/share/dotnet/dotnet /usr/bin/dotnet
+
+WORKDIR /var/task
+
+# Copy published application
+COPY bin/Release/net8.0/publish/ ./
+
+# Set the handler
+CMD [ "PetBehaviorTranslator" ]
+
+
+
