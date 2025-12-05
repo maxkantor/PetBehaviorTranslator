@@ -56,6 +56,38 @@ var adminEmail = Environment.GetEnvironmentVariable("ADMIN_EMAIL")
     ?? builder.Configuration["Email:AdminEmail"] 
     ?? string.Empty;
 
+// Get Credit System configuration
+var freeSearchLimit = builder.Configuration.GetValue<int>("CreditSystem:FreeSearchLimit", 5);
+var tokenSecretSsmParameter = builder.Configuration["CreditSystem:TokenSecretSsmParameter"] 
+    ?? "/pettranslator/credit-token-secret";
+
+// Initialize AWS SSM client for retrieving token secret
+string tokenSecret;
+try
+{
+    using var ssmClient = new Amazon.SimpleSystemsManagement.AmazonSimpleSystemsManagementClient();
+    var request = new Amazon.SimpleSystemsManagement.Model.GetParameterRequest
+    {
+        Name = tokenSecretSsmParameter,
+        WithDecryption = true
+    };
+    var response = await ssmClient.GetParameterAsync(request);
+    tokenSecret = response.Parameter.Value;
+}
+catch (Exception ex)
+{
+    // Fallback to environment variable if SSM fails (for local development)
+    tokenSecret = Environment.GetEnvironmentVariable("CREDIT_TOKEN_SECRET") 
+        ?? throw new InvalidOperationException($"Failed to retrieve token secret from SSM ({tokenSecretSsmParameter}) and CREDIT_TOKEN_SECRET env var not set. Error: {ex.Message}");
+}
+
+// Initialize TokenService
+var tokenService = new PetBehaviorTranslator.TokenService(tokenSecret);
+
+// Load credit tiers from configuration
+var creditTiers = builder.Configuration.GetSection("CreditSystem:Tiers").Get<List<CreditTier>>() 
+    ?? new List<CreditTier>();
+
 // Helper function to generate Amazon affiliate link
 string GenerateAmazonAffiliateLink(string productName)
 {
@@ -377,6 +409,209 @@ app.MapPost("/api/payment/complete", (PaymentCompleteRequest request) =>
     });
 })
 .WithName("CompletePayment")
+.WithOpenApi();
+
+// ============================================================================
+// CREDIT SYSTEM ENDPOINTS - Stateless token-based metered usage
+// ============================================================================
+
+// 1. GET /credits/get-token - Create or retrieve a credit token for a user
+app.MapPost("/api/credits/get-token", (GetTokenRequest request) =>
+{
+    if (string.IsNullOrWhiteSpace(request.UserId))
+    {
+        return Results.BadRequest(new { message = "UserId is required" });
+    }
+
+    // Create new token with initial values
+    var token = tokenService.CreateToken(request.UserId, freeSearchesUsed: 0, creditsRemaining: 0);
+    
+    return Results.Ok(new
+    {
+        token,
+        userId = request.UserId,
+        freeSearchesUsed = 0,
+        creditsRemaining = 0,
+        freeSearchLimit = freeSearchLimit
+    });
+})
+.WithName("GetCreditToken")
+.WithOpenApi();
+
+// 2. POST /credits/use - Use a free search or credit
+app.MapPost("/api/credits/use", (UseCreditsRequest request) =>
+{
+    if (string.IsNullOrWhiteSpace(request.CreditToken))
+    {
+        return Results.BadRequest(new { message = "CreditToken is required" });
+    }
+
+    // Validate token
+    var payload = tokenService.ValidateToken(request.CreditToken);
+    if (payload == null)
+    {
+        return Results.Unauthorized();
+    }
+
+    // Check if user has free searches remaining
+    if (payload.FreeSearchesUsed < freeSearchLimit)
+    {
+        payload.FreeSearchesUsed++;
+        var newToken = tokenService.UpdateToken(payload);
+        
+        return Results.Ok(new
+        {
+            token = newToken,
+            freeSearchesUsed = payload.FreeSearchesUsed,
+            creditsRemaining = payload.CreditsRemaining,
+            freeSearchLimit = freeSearchLimit,
+            usedFreeSearch = true
+        });
+    }
+
+    // No free searches left, check credits
+    if (payload.CreditsRemaining > 0)
+    {
+        payload.CreditsRemaining--;
+        var newToken = tokenService.UpdateToken(payload);
+        
+        return Results.Ok(new
+        {
+            token = newToken,
+            freeSearchesUsed = payload.FreeSearchesUsed,
+            creditsRemaining = payload.CreditsRemaining,
+            freeSearchLimit = freeSearchLimit,
+            usedCredit = true
+        });
+    }
+
+    // No credits remaining
+    return Results.Ok(new
+    {
+        error = "NO_CREDITS",
+        message = "No free searches or credits remaining. Please purchase credits to continue.",
+        freeSearchesUsed = payload.FreeSearchesUsed,
+        creditsRemaining = payload.CreditsRemaining,
+        freeSearchLimit = freeSearchLimit
+    });
+})
+.WithName("UseCredits")
+.WithOpenApi();
+
+// 3. POST /credits/purchase - Purchase credits (integrates with existing payment flow)
+app.MapPost("/api/credits/purchase", (PurchaseCreditsRequest request) =>
+{
+    if (request.TierId <= 0 || string.IsNullOrWhiteSpace(request.ExistingToken))
+    {
+        return Results.BadRequest(new { message = "TierId and ExistingToken are required" });
+    }
+
+    // Validate existing token
+    var payload = tokenService.ValidateToken(request.ExistingToken);
+    if (payload == null)
+    {
+        return Results.BadRequest(new { message = "Invalid token" });
+    }
+
+    // Find the tier
+    var tier = creditTiers.FirstOrDefault(t => t.Id == request.TierId);
+    if (tier == null)
+    {
+        return Results.BadRequest(new { message = "Invalid tier ID" });
+    }
+
+    // In production, integrate with Stripe/PayPal here
+    // For now, create a mock checkout URL similar to premium payment
+    var baseUrl = Environment.GetEnvironmentVariable("FRONTEND_URL") ?? "https://www.petbehaviortranslator.com";
+    var successUrl = $"{baseUrl}/credits/success?userId={payload.UserId}&tierId={tier.Id}&token={Uri.EscapeDataString(request.ExistingToken)}";
+    var cancelUrl = $"{baseUrl}/credits";
+
+    return Results.Ok(new
+    {
+        checkoutUrl = $"{baseUrl}/credits/mock-checkout?userId={payload.UserId}&tierId={tier.Id}&price={tier.Price}&name={Uri.EscapeDataString(tier.Name)}&credits={tier.Credits}&token={Uri.EscapeDataString(request.ExistingToken)}&success={Uri.EscapeDataString(successUrl)}&cancel={Uri.EscapeDataString(cancelUrl)}"
+    });
+})
+.WithName("PurchaseCredits")
+.WithOpenApi();
+
+// 4. POST /credits/complete-purchase - Complete credit purchase and update token
+app.MapPost("/api/credits/complete-purchase", (CompletePurchaseRequest request) =>
+{
+    if (request.TierId <= 0 || string.IsNullOrWhiteSpace(request.ExistingToken))
+    {
+        return Results.BadRequest(new { message = "TierId and ExistingToken are required" });
+    }
+
+    // Validate existing token
+    var payload = tokenService.ValidateToken(request.ExistingToken);
+    if (payload == null)
+    {
+        return Results.BadRequest(new { message = "Invalid token" });
+    }
+
+    // Find the tier
+    var tier = creditTiers.FirstOrDefault(t => t.Id == request.TierId);
+    if (tier == null)
+    {
+        return Results.BadRequest(new { message = "Invalid tier ID" });
+    }
+
+    // Add credits to token
+    payload.CreditsRemaining += tier.Credits;
+    var newToken = tokenService.UpdateToken(payload);
+
+    return Results.Ok(new
+    {
+        success = true,
+        token = newToken,
+        creditsAdded = tier.Credits,
+        creditsRemaining = payload.CreditsRemaining,
+        tierName = tier.Name,
+        message = $"Successfully purchased {tier.Credits} credits!"
+    });
+})
+.WithName("CompleteCreditPurchase")
+.WithOpenApi();
+
+// 5. GET /credits/tiers - Get available credit tiers
+app.MapGet("/api/credits/tiers", () =>
+{
+    return Results.Ok(new
+    {
+        tiers = creditTiers,
+        freeSearchLimit = freeSearchLimit
+    });
+})
+.WithName("GetCreditTiers")
+.WithOpenApi();
+
+// 6. POST /credits/validate - Validate token and return current state
+app.MapPost("/api/credits/validate", (ValidateTokenRequest request) =>
+{
+    if (string.IsNullOrWhiteSpace(request.CreditToken))
+    {
+        return Results.BadRequest(new { message = "CreditToken is required" });
+    }
+
+    var payload = tokenService.ValidateToken(request.CreditToken);
+    if (payload == null)
+    {
+        return Results.Unauthorized();
+    }
+
+    return Results.Ok(new
+    {
+        valid = true,
+        userId = payload.UserId,
+        freeSearchesUsed = payload.FreeSearchesUsed,
+        creditsRemaining = payload.CreditsRemaining,
+        freeSearchLimit = freeSearchLimit,
+        freeSearchesRemaining = Math.Max(0, freeSearchLimit - payload.FreeSearchesUsed),
+        issuedAt = payload.IssuedAt,
+        expiresAt = payload.ExpiresAt
+    });
+})
+.WithName("ValidateToken")
 .WithOpenApi();
 
 // Translate endpoint
@@ -844,6 +1079,27 @@ public record SupportRequest(string? UserId, string? Email, string? Subject, str
 public record PaymentRequest(string UserId, string PlanId);
 
 public record PaymentCompleteRequest(string UserId, string PlanId, string? TransactionId = null);
+
+// Credit System Records
+public record GetTokenRequest(string UserId);
+
+public record UseCreditsRequest(string CreditToken);
+
+public record PurchaseCreditsRequest(int TierId, string ExistingToken);
+
+public record CompletePurchaseRequest(int TierId, string ExistingToken, string? TransactionId = null);
+
+public record ValidateTokenRequest(string CreditToken);
+
+public class CreditTier
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
+    public decimal Price { get; set; }
+    public int Credits { get; set; }
+    public bool Popular { get; set; } = false;
+}
 
 public class SupportTicket
 {
