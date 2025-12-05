@@ -13,6 +13,9 @@ function Credits() {
   const [loadingTiers, setLoadingTiers] = useState(true)
 
   useEffect(() => {
+    // Reset loading state when component mounts (e.g., when user comes back from checkout)
+    setLoading(false)
+    setSelectedTier(null)
     loadTiers()
   }, [])
 
@@ -47,8 +50,16 @@ function Credits() {
       const response = await purchaseCredits(tierId)
       
       if (response.checkoutUrl) {
-        // Redirect to checkout
-        window.location.href = response.checkoutUrl
+        // Reset state before redirecting (in case user comes back)
+        setLoading(false)
+        setSelectedTier(null)
+        // Small delay to ensure state resets before navigation
+        setTimeout(() => {
+          window.location.href = response.checkoutUrl
+        }, 100)
+      } else {
+        setLoading(false)
+        setSelectedTier(null)
       }
     } catch (error) {
       console.error('Purchase error:', error)
