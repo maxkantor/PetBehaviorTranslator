@@ -233,6 +233,99 @@ app.MapGet("/api/admin/users", () =>
 .WithName("GetAllUsers")
 .WithOpenApi();
 
+// Admin endpoint - Set premium status with specific plan
+app.MapPost("/api/admin/set-premium-plan/{userId}", (string userId, PremiumPlanRequest request) =>
+{
+    if (string.IsNullOrWhiteSpace(userId))
+    {
+        return Results.BadRequest(new { message = "User ID is required" });
+    }
+    
+    if (!usageTracker.ContainsKey(userId))
+    {
+        usageTracker[userId] = new UserUsage { UserId = userId };
+    }
+    
+    var usage = usageTracker[userId];
+    usage.IsPremium = true;
+    
+    // Set expiration based on plan
+    var planDurations = new Dictionary<string, int>
+    {
+        { "monthly", 30 },
+        { "yearly", 365 },
+        { "lifetime", 36500 } // 100 years
+    };
+    
+    if (planDurations.ContainsKey(request.PlanId))
+    {
+        usage.PremiumExpiresAt = DateTime.UtcNow.AddDays(planDurations[request.PlanId]);
+    }
+    else
+    {
+        usage.PremiumExpiresAt = DateTime.UtcNow.AddYears(10); // Default 10 years
+    }
+    
+    usage.DailyCount = 0; // Reset count
+    
+    return Results.Ok(new 
+    { 
+        success = true, 
+        isPremium = true,
+        planId = request.PlanId,
+        message = $"User set to {request.PlanId} premium plan",
+        expiresAt = usage.PremiumExpiresAt
+    });
+})
+.WithName("SetPremiumPlan")
+.WithOpenApi();
+
+// Admin endpoint - Grant credits to a user
+app.MapPost("/api/admin/grant-credits/{userId}", (string userId, GrantCreditsRequest request) =>
+{
+    if (string.IsNullOrWhiteSpace(userId))
+    {
+        return Results.BadRequest(new { message = "User ID is required" });
+    }
+    
+    if (request.Credits <= 0)
+    {
+        return Results.BadRequest(new { message = "Credits must be greater than 0" });
+    }
+    
+    // Create or get existing token for user
+    var existingToken = request.ExistingToken;
+    var payload = existingToken != null ? tokenService.ValidateToken(existingToken) : null;
+    
+    // If no valid token, create new one
+    if (payload == null || payload.UserId != userId)
+    {
+        payload = new PetBehaviorTranslator.TokenPayload
+        {
+            UserId = userId,
+            FreeSearchesUsed = 0,
+            CreditsRemaining = 0,
+            IssuedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
+            ExpiresAt = DateTimeOffset.UtcNow.AddYears(1).ToUnixTimeSeconds()
+        };
+    }
+    
+    // Add credits
+    payload.CreditsRemaining += request.Credits;
+    var newToken = tokenService.UpdateToken(payload);
+    
+    return Results.Ok(new
+    {
+        success = true,
+        token = newToken,
+        creditsAdded = request.Credits,
+        creditsRemaining = payload.CreditsRemaining,
+        message = $"Successfully granted {request.Credits} credits to user {userId}"
+    });
+})
+.WithName("GrantCredits")
+.WithOpenApi();
+
 // Premium Feature 2: Priority Support
 // In-memory support tickets (replace with database in production)
 var supportTickets = new List<SupportTicket>();
@@ -1090,6 +1183,10 @@ public record PurchaseCreditsRequest(int TierId, string ExistingToken);
 public record CompletePurchaseRequest(int TierId, string ExistingToken, string? TransactionId = null);
 
 public record ValidateTokenRequest(string CreditToken);
+
+// Admin request models
+public record PremiumPlanRequest(string PlanId); // "monthly", "yearly", "lifetime"
+public record GrantCreditsRequest(int Credits, string? ExistingToken = null);
 
 public class CreditTier
 {
