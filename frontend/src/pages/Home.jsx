@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom'
 import axios from 'axios'
 import { getUserId } from '../services/premiumService'
 import { getOrCreateToken, useCredit, getCreditBalance } from '../services/creditService'
+import { checkAdmin } from '../services/adminService'
 import CreditBalanceIndicator from '../components/CreditBalanceIndicator'
 import styles from './Home.module.css'
 
@@ -29,8 +30,9 @@ function Home() {
     freeSearchLimit: 5 
   })
   const [loadingBalance, setLoadingBalance] = useState(true)
+  const [isAdmin, setIsAdmin] = useState(false)
 
-  // Load credit balance on component mount
+  // Load credit balance and check admin status on component mount
   useEffect(() => {
     const loadBalance = async () => {
       try {
@@ -40,6 +42,10 @@ function Home() {
         // Load balance
         const balance = await getCreditBalance()
         setCreditBalance(balance)
+        
+        // Check if user is admin
+        const adminStatus = await checkAdmin()
+        setIsAdmin(adminStatus)
       } catch (error) {
         console.error('Error loading credit balance:', error)
       } finally {
@@ -501,10 +507,12 @@ function Home() {
               <FaHeadset />
               Contact Support
             </Link>
-            <Link to="/admin" className={styles.adminLink}>
-              <FaPaw />
-              Admin Dashboard
-            </Link>
+            {isAdmin && (
+              <Link to="/admin" className={styles.adminLink}>
+                <FaUserShield />
+                Admin Dashboard
+              </Link>
+            )}
           </div>
 
           <div className={styles.copyright}>

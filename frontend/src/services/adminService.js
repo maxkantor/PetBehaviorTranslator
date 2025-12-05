@@ -9,6 +9,18 @@ const getAdminParams = () => {
   return { params: { adminUserId: userId } }
 }
 
+// Check if current user is admin
+export const checkAdmin = async () => {
+  try {
+    const userId = getUserId()
+    const response = await axios.get(`${API_URL}/api/admin/check`, { params: { userId } })
+    return response.data.isAdmin || false
+  } catch (error) {
+    console.error('Error checking admin status:', error)
+    return false
+  }
+}
+
 // Get all users (admin endpoint) - ADMIN ONLY
 export const getAllUsers = async () => {
   try {

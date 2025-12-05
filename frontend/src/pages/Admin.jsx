@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { FaPaw, FaUserShield, FaCrown, FaUsers, FaToggleOn, FaToggleOff, FaSync, FaCoins, FaGift, FaHistory, FaRedo, FaTrash } from 'react-icons/fa'
 import { getUserId } from '../services/premiumService'
-import { getAllUsers, setPremiumStatus, setPremiumPlan, removePremiumStatus, grantCredits, getActivities, resetUserActivities, resetAllActivities } from '../services/adminService'
+import { checkAdmin, getAllUsers, setPremiumStatus, setPremiumPlan, removePremiumStatus, grantCredits, getActivities, resetUserActivities, resetAllActivities } from '../services/adminService'
 import { getCreditToken } from '../services/creditService'
 import styles from './Admin.module.css'
 
@@ -24,16 +24,23 @@ function Admin() {
       const userId = getUserId()
       setCurrentUserId(userId)
       try {
+        // Check if user is admin first
+        const adminStatus = await checkAdmin()
+        setIsAdmin(adminStatus)
+        
+        if (!adminStatus) {
+          showMessage('Access denied. Admin access required. Set ADMIN_USER_ID environment variable to your user ID.', 'error')
+          return
+        }
+        
         await loadUsers()
-        // Check if user is admin (will be set via ADMIN_USER_ID env var)
-        // For now, allow access but backend will verify
-        setIsAdmin(true)
       } catch (error) {
         if (error.response?.status === 401) {
-          showMessage('Access denied. Admin access required.', 'error')
+          showMessage('Access denied. Admin access required. Set ADMIN_USER_ID environment variable to your user ID.', 'error')
           setIsAdmin(false)
         } else {
           console.error('Failed to initialize admin:', error)
+          showMessage('Failed to load admin dashboard', 'error')
         }
       }
     }
@@ -187,6 +194,36 @@ function Admin() {
 
   const currentUser = users.find(u => u.userId === currentUserId)
   const isCurrentUserPremium = currentUser?.isPremium || false
+
+  // If not admin, show access denied message
+  if (!isAdmin && !loading) {
+    return (
+      <div className={styles.container}>
+        <div className={styles.header}>
+          <div className={styles.iconContainer}>
+            <FaUserShield className={styles.adminIcon} />
+          </div>
+          <h1 className={styles.title}>Access Denied</h1>
+          <p className={styles.subtitle}>
+            Admin access required. Set ADMIN_USER_ID environment variable to your user ID.
+          </p>
+          <div style={{ marginTop: '1rem', padding: '1rem', background: 'rgba(255,255,255,0.1)', borderRadius: '8px', textAlign: 'left', maxWidth: '600px', margin: '1rem auto' }}>
+            <p style={{ marginBottom: '0.5rem' }}><strong>Your User ID:</strong></p>
+            <code style={{ background: 'rgba(255,255,255,0.2)', padding: '0.5rem', borderRadius: '4px', display: 'block', wordBreak: 'break-all' }}>{currentUserId}</code>
+            <p style={{ marginTop: '1rem', fontSize: '0.9rem', opacity: 0.9 }}>
+              Copy this User ID and set it as the <code>ADMIN_USER_ID</code> environment variable in your Lambda function configuration.
+            </p>
+            <p style={{ marginTop: '0.5rem', fontSize: '0.85rem', opacity: 0.8 }}>
+              After setting the environment variable, redeploy your Lambda function and refresh this page.
+            </p>
+          </div>
+          <Link to="/" className={styles.btnBack} style={{ marginTop: '2rem' }}>
+            <FaPaw /> Back to Translator
+          </Link>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className={styles.container}>
