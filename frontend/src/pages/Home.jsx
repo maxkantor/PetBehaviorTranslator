@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { FaPaw, FaBone, FaCat, FaDog, FaHeart, FaLightbulb, FaListOl, FaExclamationTriangle, FaShoppingCart, FaCopyright, FaCrown, FaHeadset, FaUserShield } from 'react-icons/fa'
+import { FaPaw, FaBone, FaCat, FaDog, FaHeart, FaLightbulb, FaListOl, FaExclamationTriangle, FaShoppingCart, FaCopyright, FaCrown, FaHeadset, FaUserShield, FaCoins } from 'react-icons/fa'
 import { Link } from 'react-router-dom'
 import axios from 'axios'
 import { getUserId } from '../services/premiumService'
@@ -483,9 +483,9 @@ function Home() {
       <footer className={styles.footer}>
         <div className={styles.footerContent}>
           <div className={styles.footerLinks}>
-            <Link to="/premium" className={styles.premiumLink}>
-              <FaPaw />
-              Go Premium — Unlimited translations
+            <Link to="/credits" className={styles.premiumLink}>
+              <FaCoins />
+              Buy Credits
             </Link>
             <Link to="/support" className={styles.supportLink}>
               <FaHeadset />
