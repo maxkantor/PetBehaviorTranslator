@@ -1,15 +1,21 @@
-import { useSearchParams, useNavigate } from 'react-router-dom'
-import { FaCreditCard, FaLock } from 'react-icons/fa'
+import { useSearchParams, useNavigate, useLocation } from 'react-router-dom'
+import { FaCreditCard, FaLock, FaCoins } from 'react-icons/fa'
 import styles from './MockCheckout.module.css'
 
 function MockCheckout() {
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
+  const location = useLocation()
 
+  const isCreditPurchase = location.pathname.includes('/credits/mock-checkout')
+  
   const userId = searchParams.get('userId')
   const planId = searchParams.get('planId')
+  const tierId = searchParams.get('tierId')
   const price = searchParams.get('price')
   const name = searchParams.get('name')
+  const credits = searchParams.get('credits')
+  const token = searchParams.get('token')
   const successUrl = searchParams.get('success')
   const cancelUrl = searchParams.get('cancel')
 
@@ -36,6 +42,11 @@ function MockCheckout() {
           <div className={styles.planDetails}>
             <div className={styles.planName}>{decodeURIComponent(name)}</div>
             <div className={styles.planPrice}>${price}</div>
+            {isCreditPurchase && credits && (
+              <div className={styles.creditsInfo}>
+                <FaCoins /> {credits} Credits
+              </div>
+            )}
           </div>
         </div>
 

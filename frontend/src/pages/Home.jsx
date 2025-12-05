@@ -2,7 +2,9 @@ import { useState, useEffect } from 'react'
 import { FaPaw, FaBone, FaCat, FaDog, FaHeart, FaLightbulb, FaListOl, FaExclamationTriangle, FaShoppingCart, FaCopyright, FaCrown, FaHeadset, FaUserShield } from 'react-icons/fa'
 import { Link } from 'react-router-dom'
 import axios from 'axios'
-import { getUserId, getUsage, canTranslate } from '../services/premiumService'
+import { getUserId } from '../services/premiumService'
+import { getOrCreateToken, useCredit, getCreditBalance } from '../services/creditService'
+import CreditBalanceIndicator from '../components/CreditBalanceIndicator'
 import styles from './Home.module.css'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001'
@@ -20,22 +22,31 @@ function Home() {
   const [results, setResults] = useState(null)
   const [error, setError] = useState(null)
   const [retryAfterSeconds, setRetryAfterSeconds] = useState(null)
-  const [usage, setUsage] = useState({ dailyCount: 0, isPremium: false, dailyLimit: 5, remaining: 5 })
-  const [loadingUsage, setLoadingUsage] = useState(true)
+  const [creditBalance, setCreditBalance] = useState({ 
+    freeSearchesRemaining: 0, 
+    creditsRemaining: 0, 
+    freeSearchesUsed: 0, 
+    freeSearchLimit: 5 
+  })
+  const [loadingBalance, setLoadingBalance] = useState(true)
 
-  // Load usage on component mount
+  // Load credit balance on component mount
   useEffect(() => {
-    const loadUsage = async () => {
+    const loadBalance = async () => {
       try {
-        const usageData = await getUsage()
-        setUsage(usageData)
+        const userId = getUserId()
+        // Get or create token if needed
+        await getOrCreateToken(userId)
+        // Load balance
+        const balance = await getCreditBalance()
+        setCreditBalance(balance)
       } catch (error) {
-        console.error('Error loading usage:', error)
+        console.error('Error loading credit balance:', error)
       } finally {
-        setLoadingUsage(false)
+        setLoadingBalance(false)
       }
     }
-    loadUsage()
+    loadBalance()
   }, [])
 
   const handleTranslate = async () => {
@@ -44,10 +55,12 @@ function Home() {
       return
     }
 
-    // Check if user can translate
-    const canProceed = await canTranslate()
-    if (!canProceed) {
-      setError('Daily limit reached! Upgrade to Premium for unlimited translations.')
+    // Check if user has credits available
+    const hasFreeSearches = creditBalance.freeSearchesRemaining > 0
+    const hasCredits = creditBalance.creditsRemaining > 0
+    
+    if (!hasFreeSearches && !hasCredits) {
+      setError('No free searches or credits remaining. Please purchase credits to continue.')
       return
     }
 
@@ -56,31 +69,43 @@ function Home() {
     setResults(null)
 
     try {
-      const userId = getUserId()
+      // Use a credit before making the translation request
+      const creditResult = await useCredit()
+      
+      if (!creditResult.success || creditResult.error === 'NO_CREDITS') {
+        setError(creditResult.message || 'No credits available. Please purchase credits to continue.')
+        // Refresh balance
+        const balance = await getCreditBalance()
+        setCreditBalance(balance)
+        setLoading(false)
+        return
+      }
+
+      // Update balance from credit result
+      setCreditBalance({
+        freeSearchesRemaining: creditResult.freeSearchLimit - creditResult.freeSearchesUsed,
+        creditsRemaining: creditResult.creditsRemaining || 0,
+        freeSearchesUsed: creditResult.freeSearchesUsed || 0,
+        freeSearchLimit: creditResult.freeSearchLimit || 5
+      })
+
+      // Make translation request (no userId needed for credit system)
       const response = await axios.post(`${API_URL}/api/translate`, {
-        behavior: behavior.trim(),
-        userId: userId
+        behavior: behavior.trim()
       })
       setResults(response.data)
       setError(null)
       setRetryAfterSeconds(null)
       
-      // Refresh usage after successful translation
-      const updatedUsage = await getUsage()
-      setUsage(updatedUsage)
+      // Refresh balance after successful translation
+      const balance = await getCreditBalance()
+      setCreditBalance(balance)
     } catch (err) {
       const errorMessage = err.response?.data?.detail 
         || err.response?.data?.message 
         || err.message 
         || 'Failed to translate behavior. Please try again.'
       setError(errorMessage)
-      
-      // Check if it's a daily limit error
-      if (err.response?.status === 429 && err.response?.data?.extensions?.upgradeRequired) {
-        // Refresh usage
-        const updatedUsage = await getUsage()
-        setUsage(updatedUsage)
-      }
       
       // Extract retry-after information if available
       if (err.response?.status === 429 && err.response?.data?.extensions?.retryAfterSeconds) {
@@ -89,6 +114,10 @@ function Home() {
       } else {
         setRetryAfterSeconds(null)
       }
+      
+      // Refresh balance on error
+      const balance = await getCreditBalance()
+      setCreditBalance(balance)
     } finally {
       setLoading(false)
     }
@@ -216,32 +245,15 @@ function Home() {
           Type what your pet is doing — get instant answers.
         </p>
         
-        {/* Usage Display */}
-        {!loadingUsage && (
-          <div className={styles.usageDisplay}>
-            {usage.isPremium ? (
-              <div className={styles.premiumBadge}>
-                <FaCrown className={styles.crownIcon} />
-                <span>Premium Member - Unlimited Translations</span>
-              </div>
-            ) : (
-              <div className={styles.usageBadge}>
-                <span>
-                  {usage.remaining > 0 ? (
-                    <>
-                      <strong>{usage.remaining}</strong> translation{usage.remaining !== 1 ? 's' : ''} remaining today
-                    </>
-                  ) : (
-                    <>Daily limit reached</>
-                  )}
-                </span>
-                <Link to="/premium" className={styles.upgradeLink}>
-                  Upgrade to Premium
-                </Link>
-              </div>
-            )}
-          </div>
-        )}
+        {/* Credit Balance Display */}
+        <div className={styles.usageDisplay}>
+          <CreditBalanceIndicator />
+          {!loadingBalance && creditBalance.freeSearchesRemaining === 0 && creditBalance.creditsRemaining === 0 && (
+            <Link to="/credits" className={styles.upgradeLink}>
+              Buy Credits
+            </Link>
+          )}
+        </div>
       </div>
 
       <div className={styles.content}>

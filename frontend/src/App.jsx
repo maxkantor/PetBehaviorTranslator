@@ -5,6 +5,7 @@ import Support from './pages/Support'
 import Admin from './pages/Admin'
 import PaymentSuccess from './pages/PaymentSuccess'
 import MockCheckout from './pages/MockCheckout'
+import Credits from './pages/Credits'
 import './App.css'
 
 function App() {
@@ -16,6 +17,9 @@ function App() {
       <Route path="/admin" element={<Admin />} />
       <Route path="/payment/success" element={<PaymentSuccess />} />
       <Route path="/payment/mock-checkout" element={<MockCheckout />} />
+      <Route path="/credits" element={<Credits />} />
+      <Route path="/credits/mock-checkout" element={<MockCheckout />} />
+      <Route path="/credits/success" element={<PaymentSuccess />} />
     </Routes>
   )
 }

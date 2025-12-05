@@ -31,12 +31,18 @@ function CreditBalanceIndicator() {
   // Refresh balance (call this after using a credit)
   window.refreshCreditBalance = loadBalance
 
-  if (loading) {
-    return null
-  }
-
   const hasFreeSearches = balance.freeSearchesRemaining > 0
   const hasCredits = balance.creditsRemaining > 0
+
+  if (loading) {
+    return (
+      <div className={styles.container}>
+        <div className={styles.badge}>
+          <span className={styles.label}>Loading...</span>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className={styles.container}>
@@ -49,18 +55,18 @@ function CreditBalanceIndicator() {
         </div>
       )}
 
-      {/* Paid Credits */}
+      {/* Paid Credits - Always show, even if 0 */}
       <div className={`${styles.badge} ${hasCredits ? styles.hasCredits : styles.noCredits}`}>
         <FaCoins className={styles.icon} />
         <span className={styles.count}>{balance.creditsRemaining}</span>
         <span className={styles.label}>Credits</span>
       </div>
 
-      {/* Buy Credits Link */}
-      {!hasCredits && !hasFreeSearches && (
-        <Link to="/credits" className={styles.buyLink}>
-          Buy Credits
-        </Link>
+      {/* Show free searches remaining message */}
+      {!hasFreeSearches && !hasCredits && balance.freeSearchesUsed >= balance.freeSearchLimit && (
+        <div className={styles.badge} style={{ background: 'rgba(255, 193, 7, 0.2)', color: '#856404' }}>
+          <span className={styles.label}>Free searches used up</span>
+        </div>
       )}
     </div>
   )
