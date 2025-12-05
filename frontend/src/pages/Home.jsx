@@ -100,6 +100,11 @@ function Home() {
       // Refresh balance after successful translation
       const balance = await getCreditBalance()
       setCreditBalance(balance)
+      
+      // Refresh the CreditBalanceIndicator component
+      if (window.refreshCreditBalance) {
+        window.refreshCreditBalance()
+      }
     } catch (err) {
       const errorMessage = err.response?.data?.detail 
         || err.response?.data?.message 
@@ -118,6 +123,11 @@ function Home() {
       // Refresh balance on error
       const balance = await getCreditBalance()
       setCreditBalance(balance)
+      
+      // Refresh the CreditBalanceIndicator component
+      if (window.refreshCreditBalance) {
+        window.refreshCreditBalance()
+      }
     } finally {
       setLoading(false)
     }

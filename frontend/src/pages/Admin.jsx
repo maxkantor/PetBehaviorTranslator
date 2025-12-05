@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import { FaPaw, FaUserShield, FaCrown, FaUsers, FaToggleOn, FaToggleOff, FaSync } from 'react-icons/fa'
+import { FaPaw, FaUserShield, FaCrown, FaUsers, FaToggleOn, FaToggleOff, FaSync, FaCoins, FaGift } from 'react-icons/fa'
 import { getUserId } from '../services/premiumService'
-import { getAllUsers, setPremiumStatus, removePremiumStatus } from '../services/adminService'
+import { getAllUsers, setPremiumStatus, setPremiumPlan, removePremiumStatus, grantCredits } from '../services/adminService'
+import { getCreditToken } from '../services/creditService'
 import styles from './Admin.module.css'
 
 function Admin() {
@@ -11,11 +12,29 @@ function Admin() {
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState('')
   const [messageType, setMessageType] = useState('') // 'success' or 'error'
+  const [selectedPlan, setSelectedPlan] = useState('lifetime')
+  const [creditsToGrant, setCreditsToGrant] = useState(100)
+  const [grantingCredits, setGrantingCredits] = useState(null)
 
   useEffect(() => {
-    const userId = getUserId()
-    setCurrentUserId(userId)
-    loadUsers()
+    const initializeAdmin = async () => {
+      const userId = getUserId()
+      setCurrentUserId(userId)
+      await loadUsers()
+      // Automatically set current user as admin/premium if not already
+      const data = await getAllUsers()
+      const currentUser = data.users?.find(u => u.userId === userId)
+      if (!currentUser?.isPremium) {
+        try {
+          await setPremiumStatus(userId)
+          showMessage('You have been set as admin/premium', 'success')
+          await loadUsers()
+        } catch (error) {
+          console.error('Failed to set admin status:', error)
+        }
+      }
+    }
+    initializeAdmin()
   }, [])
 
   const loadUsers = async () => {
@@ -71,6 +90,36 @@ function Admin() {
       await handleRemovePremium(currentUserId)
     } else {
       await handleSetPremium(currentUserId)
+    }
+  }
+
+  const handleSetPremiumPlan = async (userId, planId) => {
+    setLoading(true)
+    try {
+      await setPremiumPlan(userId, planId)
+      showMessage(`Premium ${planId} plan granted to ${userId}`, 'success')
+      await loadUsers()
+    } catch (error) {
+      showMessage('Failed to set premium plan', 'error')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleGrantCredits = async (userId) => {
+    setGrantingCredits(userId)
+    try {
+      const token = getCreditToken()
+      const result = await grantCredits(userId, creditsToGrant, token)
+      showMessage(`Granted ${creditsToGrant} credits to ${userId}. New token: ${result.token.substring(0, 20)}...`, 'success')
+      // If granting to current user, update their token
+      if (userId === currentUserId && result.token) {
+        localStorage.setItem('creditToken', result.token)
+      }
+    } catch (error) {
+      showMessage('Failed to grant credits', 'error')
+    } finally {
+      setGrantingCredits(null)
     }
   }
 
@@ -188,13 +237,34 @@ function Admin() {
               
               <div className={styles.userActions}>
                 {user.isPremium ? (
-                  <button 
-                    onClick={() => handleRemovePremium(user.userId)}
-                    className={styles.btnSecondary}
-                    disabled={loading}
-                  >
-                    Remove Premium
-                  </button>
+                  <>
+                    <button 
+                      onClick={() => handleRemovePremium(user.userId)}
+                      className={styles.btnSecondary}
+                      disabled={loading}
+                    >
+                      Remove Premium
+                    </button>
+                    <div className={styles.planSelector}>
+                      <label>Set Plan:</label>
+                      <select 
+                        value={selectedPlan} 
+                        onChange={(e) => setSelectedPlan(e.target.value)}
+                        className={styles.planSelect}
+                      >
+                        <option value="monthly">Monthly</option>
+                        <option value="yearly">Yearly</option>
+                        <option value="lifetime">Lifetime</option>
+                      </select>
+                      <button 
+                        onClick={() => handleSetPremiumPlan(user.userId, selectedPlan)}
+                        className={styles.btnPrimary}
+                        disabled={loading}
+                      >
+                        <FaCrown /> Set Plan
+                      </button>
+                    </div>
+                  </>
                 ) : (
                   <button 
                     onClick={() => handleSetPremium(user.userId)}
@@ -204,6 +274,35 @@ function Admin() {
                     Grant Premium
                   </button>
                 )}
+                
+                {/* Grant Credits Section */}
+                <div className={styles.creditsSection}>
+                  <label>Grant Credits:</label>
+                  <div className={styles.creditsInput}>
+                    <input
+                      type="number"
+                      min="1"
+                      value={creditsToGrant}
+                      onChange={(e) => setCreditsToGrant(parseInt(e.target.value) || 100)}
+                      className={styles.creditsInputField}
+                    />
+                    <button 
+                      onClick={() => handleGrantCredits(user.userId)}
+                      className={styles.btnCredits}
+                      disabled={loading || grantingCredits === user.userId}
+                    >
+                      {grantingCredits === user.userId ? (
+                        <>
+                          <FaSync className={styles.spinning} /> Granting...
+                        </>
+                      ) : (
+                        <>
+                          <FaCoins /> Grant Credits
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
               </div>
               
               {user.userId === currentUserId && (

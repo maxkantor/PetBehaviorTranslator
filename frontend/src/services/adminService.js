@@ -24,6 +24,19 @@ export const setPremiumStatus = async (userId) => {
   }
 }
 
+// Set premium status with specific plan
+export const setPremiumPlan = async (userId, planId) => {
+  try {
+    const response = await axios.post(`${API_URL}/api/admin/set-premium-plan/${userId}`, {
+      planId
+    })
+    return response.data
+  } catch (error) {
+    console.error('Error setting premium plan:', error)
+    throw error
+  }
+}
+
 // Remove premium status from a user (admin endpoint)
 export const removePremiumStatus = async (userId) => {
   try {
@@ -31,6 +44,20 @@ export const removePremiumStatus = async (userId) => {
     return response.data
   } catch (error) {
     console.error('Error removing premium status:', error)
+    throw error
+  }
+}
+
+// Grant credits to a user
+export const grantCredits = async (userId, credits, existingToken = null) => {
+  try {
+    const response = await axios.post(`${API_URL}/api/admin/grant-credits/${userId}`, {
+      credits,
+      existingToken
+    })
+    return response.data
+  } catch (error) {
+    console.error('Error granting credits:', error)
     throw error
   }
 }
