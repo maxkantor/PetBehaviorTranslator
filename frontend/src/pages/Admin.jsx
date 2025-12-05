@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import { FaPaw, FaUserShield, FaCrown, FaUsers, FaToggleOn, FaToggleOff, FaSync, FaCoins, FaGift } from 'react-icons/fa'
+import { FaPaw, FaUserShield, FaCrown, FaUsers, FaToggleOn, FaToggleOff, FaSync, FaCoins, FaGift, FaHistory, FaRedo, FaTrash } from 'react-icons/fa'
 import { getUserId } from '../services/premiumService'
-import { getAllUsers, setPremiumStatus, setPremiumPlan, removePremiumStatus, grantCredits } from '../services/adminService'
+import { getAllUsers, setPremiumStatus, setPremiumPlan, removePremiumStatus, grantCredits, getActivities, resetUserActivities, resetAllActivities } from '../services/adminService'
 import { getCreditToken } from '../services/creditService'
 import styles from './Admin.module.css'
 
@@ -15,22 +15,25 @@ function Admin() {
   const [selectedPlan, setSelectedPlan] = useState('lifetime')
   const [creditsToGrant, setCreditsToGrant] = useState(100)
   const [grantingCredits, setGrantingCredits] = useState(null)
+  const [activities, setActivities] = useState([])
+  const [showActivities, setShowActivities] = useState(false)
+  const [isAdmin, setIsAdmin] = useState(false)
 
   useEffect(() => {
     const initializeAdmin = async () => {
       const userId = getUserId()
       setCurrentUserId(userId)
-      await loadUsers()
-      // Automatically set current user as admin/premium if not already
-      const data = await getAllUsers()
-      const currentUser = data.users?.find(u => u.userId === userId)
-      if (!currentUser?.isPremium) {
-        try {
-          await setPremiumStatus(userId)
-          showMessage('You have been set as admin/premium', 'success')
-          await loadUsers()
-        } catch (error) {
-          console.error('Failed to set admin status:', error)
+      try {
+        await loadUsers()
+        // Check if user is admin (will be set via ADMIN_USER_ID env var)
+        // For now, allow access but backend will verify
+        setIsAdmin(true)
+      } catch (error) {
+        if (error.response?.status === 401) {
+          showMessage('Access denied. Admin access required.', 'error')
+          setIsAdmin(false)
+        } else {
+          console.error('Failed to initialize admin:', error)
         }
       }
     }
@@ -117,9 +120,68 @@ function Admin() {
         localStorage.setItem('creditToken', result.token)
       }
     } catch (error) {
-      showMessage('Failed to grant credits', 'error')
+      if (error.response?.status === 401) {
+        showMessage('Access denied. Admin access required.', 'error')
+      } else {
+        showMessage('Failed to grant credits', 'error')
+      }
     } finally {
       setGrantingCredits(null)
+    }
+  }
+
+  const loadActivities = async () => {
+    try {
+      const data = await getActivities()
+      setActivities(data.activities || [])
+    } catch (error) {
+      if (error.response?.status === 401) {
+        showMessage('Access denied. Admin access required.', 'error')
+      } else {
+        showMessage('Failed to load activities', 'error')
+      }
+    }
+  }
+
+  const handleResetUser = async (userId) => {
+    if (!window.confirm(`Reset activities for user ${userId}?`)) {
+      return
+    }
+    setLoading(true)
+    try {
+      await resetUserActivities(userId)
+      showMessage(`Activities reset for user ${userId}`, 'success')
+      await loadUsers()
+      await loadActivities()
+    } catch (error) {
+      if (error.response?.status === 401) {
+        showMessage('Access denied. Admin access required.', 'error')
+      } else {
+        showMessage('Failed to reset user activities', 'error')
+      }
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleResetAll = async () => {
+    if (!window.confirm('Reset ALL user activities? This cannot be undone.')) {
+      return
+    }
+    setLoading(true)
+    try {
+      await resetAllActivities()
+      showMessage('All user activities reset', 'success')
+      await loadUsers()
+      await loadActivities()
+    } catch (error) {
+      if (error.response?.status === 401) {
+        showMessage('Access denied. Admin access required.', 'error')
+      } else {
+        showMessage('Failed to reset all activities', 'error')
+      }
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -202,8 +264,69 @@ function Admin() {
               {loading ? 'Loading...' : 'Refresh Users'}
             </button>
           </div>
+
+          {/* Activity Log */}
+          <div className={styles.card}>
+            <h3>Activity Log</h3>
+            <p className={styles.cardDescription}>
+              View and manage user activities
+            </p>
+            <div className={styles.cardActions}>
+              <button 
+                onClick={() => {
+                  setShowActivities(!showActivities)
+                  if (!showActivities) {
+                    loadActivities()
+                  }
+                }}
+                className={styles.btnPrimary}
+              >
+                <FaHistory /> {showActivities ? 'Hide' : 'Show'} Activities
+              </button>
+              <button 
+                onClick={handleResetAll}
+                className={styles.btnDanger}
+                disabled={loading}
+              >
+                <FaTrash /> Reset All
+              </button>
+            </div>
+          </div>
         </div>
       </div>
+
+      {/* Activities Section */}
+      {showActivities && (
+        <div className={styles.section}>
+          <h2 className={styles.sectionTitle}>
+            <FaHistory /> Activity Log ({activities.length})
+          </h2>
+          <div className={styles.activitiesList}>
+            {activities.length === 0 ? (
+              <p className={styles.emptyState}>No activities found</p>
+            ) : (
+              activities.map((activity, idx) => (
+                <div key={idx} className={styles.activityItem}>
+                  <div className={styles.activityTime}>
+                    {new Date(activity.timestamp).toLocaleString()}
+                  </div>
+                  <div className={styles.activityUser}>
+                    <strong>{activity.userId}</strong>
+                  </div>
+                  <div className={styles.activityAction}>
+                    {activity.action}
+                  </div>
+                  {activity.details && (
+                    <div className={styles.activityDetails}>
+                      {activity.details}
+                    </div>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
 
       {/* All Users */}
       <div className={styles.section}>
@@ -303,6 +426,16 @@ function Admin() {
                     </button>
                   </div>
                 </div>
+
+                {/* Reset Activities Button */}
+                <button 
+                  onClick={() => handleResetUser(user.userId)}
+                  className={styles.btnSecondary}
+                  disabled={loading}
+                  title="Reset this user's daily count"
+                >
+                  <FaRedo /> Reset Activities
+                </button>
               </div>
               
               {user.userId === currentUserId && (
