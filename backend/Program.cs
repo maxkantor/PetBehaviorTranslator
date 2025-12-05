@@ -61,6 +61,11 @@ var freeSearchLimit = builder.Configuration.GetValue<int>("CreditSystem:FreeSear
 var tokenSecretSsmParameter = builder.Configuration["CreditSystem:TokenSecretSsmParameter"] 
     ?? "/pettranslator/credit-token-secret";
 
+// Get Admin configuration
+var adminUserId = Environment.GetEnvironmentVariable("ADMIN_USER_ID") 
+    ?? builder.Configuration["Admin:AdminUserId"] 
+    ?? string.Empty;
+
 // Initialize AWS SSM client for retrieving token secret
 string tokenSecret;
 try
@@ -104,6 +109,57 @@ string GenerateAmazonAffiliateLink(string productName)
 
 // In-memory storage for usage tracking (replace with DynamoDB in production)
 var usageTracker = new Dictionary<string, UserUsage>();
+
+// Activity log for admin viewing
+var activityLog = new List<ActivityLogEntry>();
+
+// Helper function to check if user is admin
+bool IsAdmin(string userId)
+{
+    if (string.IsNullOrWhiteSpace(adminUserId))
+    {
+        Console.WriteLine($"[ADMIN CHECK] Admin user ID not configured. Set ADMIN_USER_ID environment variable.");
+        return false;
+    }
+    
+    if (string.IsNullOrWhiteSpace(userId))
+    {
+        Console.WriteLine($"[ADMIN CHECK] User ID is empty.");
+        return false;
+    }
+    
+    // Trim and compare (case-sensitive for security)
+    var isAdmin = userId.Trim() == adminUserId.Trim();
+    
+    if (!isAdmin)
+    {
+        Console.WriteLine($"[ADMIN CHECK] Access denied. User ID: '{userId.Trim()}', Admin ID: '{adminUserId.Trim()}'");
+    }
+    else
+    {
+        Console.WriteLine($"[ADMIN CHECK] Admin access granted for user: '{userId.Trim()}'");
+    }
+    
+    return isAdmin;
+}
+
+// Helper function to log activity
+void LogActivity(string userId, string action, string details = "")
+{
+    activityLog.Add(new ActivityLogEntry
+    {
+        UserId = userId,
+        Action = action,
+        Details = details,
+        Timestamp = DateTime.UtcNow
+    });
+    
+    // Keep only last 1000 activities
+    if (activityLog.Count > 1000)
+    {
+        activityLog.RemoveAt(0);
+    }
+}
 
 // Premium/Usage endpoints
 app.MapGet("/api/usage/{userId}", (string userId) =>
@@ -158,9 +214,15 @@ app.MapPost("/api/premium/status", (PremiumStatusRequest request) =>
 .WithName("SetPremiumStatus")
 .WithOpenApi();
 
-// Admin endpoint - Set any user to premium/admin (no restrictions)
-app.MapPost("/api/admin/set-premium/{userId}", (string userId) =>
+// Admin endpoint - Set any user to premium/admin - ADMIN ONLY
+app.MapPost("/api/admin/set-premium/{userId}", (string userId, HttpContext context) =>
 {
+    var adminUserId = context.Request.Query["adminUserId"].ToString();
+    if (!IsAdmin(adminUserId))
+    {
+        return Results.Unauthorized();
+    }
+    
     if (string.IsNullOrWhiteSpace(userId))
     {
         return Results.BadRequest(new { message = "User ID is required" });
@@ -176,6 +238,8 @@ app.MapPost("/api/admin/set-premium/{userId}", (string userId) =>
     usage.PremiumExpiresAt = DateTime.UtcNow.AddYears(10); // 10 years expiration
     usage.DailyCount = 0; // Reset count
     
+    LogActivity(adminUserId, "SET_PREMIUM", $"Set premium for user {userId}");
+    
     return Results.Ok(new 
     { 
         success = true, 
@@ -187,9 +251,15 @@ app.MapPost("/api/admin/set-premium/{userId}", (string userId) =>
 .WithName("SetAdminStatus")
 .WithOpenApi();
 
-// Admin endpoint - Remove premium status (revert to normal user)
-app.MapPost("/api/admin/remove-premium/{userId}", (string userId) =>
+// Admin endpoint - Remove premium status (revert to normal user) - ADMIN ONLY
+app.MapPost("/api/admin/remove-premium/{userId}", (string userId, HttpContext context) =>
 {
+    var adminUserId = context.Request.Query["adminUserId"].ToString();
+    if (!IsAdmin(adminUserId))
+    {
+        return Results.Unauthorized();
+    }
+    
     if (string.IsNullOrWhiteSpace(userId))
     {
         return Results.BadRequest(new { message = "User ID is required" });
@@ -205,6 +275,8 @@ app.MapPost("/api/admin/remove-premium/{userId}", (string userId) =>
     usage.PremiumExpiresAt = null;
     usage.DailyCount = 0; // Reset count to start fresh
     
+    LogActivity(adminUserId, "REMOVE_PREMIUM", $"Removed premium from user {userId}");
+    
     return Results.Ok(new 
     { 
         success = true, 
@@ -216,9 +288,36 @@ app.MapPost("/api/admin/remove-premium/{userId}", (string userId) =>
 .WithName("RemoveAdminStatus")
 .WithOpenApi();
 
-// Admin endpoint - Get all users (for admin dashboard)
-app.MapGet("/api/admin/users", () =>
+// Admin endpoint - Check if user is admin
+app.MapGet("/api/admin/check", (HttpContext context) =>
 {
+    var userId = context.Request.Query["userId"].ToString();
+    var isAdmin = IsAdmin(userId);
+    
+    return Results.Ok(new 
+    { 
+        isAdmin,
+        userId,
+        adminConfigured = !string.IsNullOrWhiteSpace(adminUserId),
+        message = isAdmin 
+            ? "You are an admin" 
+            : string.IsNullOrWhiteSpace(adminUserId) 
+                ? "Admin user ID not configured. Set ADMIN_USER_ID environment variable." 
+                : "You are not an admin. Your user ID does not match the configured admin user ID."
+    });
+})
+.WithName("CheckAdmin")
+.WithOpenApi();
+
+// Admin endpoint - Get all users (for admin dashboard) - ADMIN ONLY
+app.MapGet("/api/admin/users", (HttpContext context) =>
+{
+    var userId = context.Request.Query["adminUserId"].ToString();
+    if (!IsAdmin(userId))
+    {
+        return Results.Unauthorized();
+    }
+    
     var users = usageTracker.Values.Select(u => new
     {
         u.UserId,
@@ -228,14 +327,112 @@ app.MapGet("/api/admin/users", () =>
         u.LastResetDate
     }).ToList();
     
+    LogActivity(userId, "VIEW_USERS", $"Viewed {users.Count} users");
+    
     return Results.Ok(new { users, totalCount = users.Count });
 })
 .WithName("GetAllUsers")
 .WithOpenApi();
 
-// Admin endpoint - Set premium status with specific plan
-app.MapPost("/api/admin/set-premium-plan/{userId}", (string userId, PremiumPlanRequest request) =>
+// Admin endpoint - Get activity log - ADMIN ONLY
+app.MapGet("/api/admin/activities", (HttpContext context) =>
 {
+    var userId = context.Request.Query["adminUserId"].ToString();
+    if (!IsAdmin(userId))
+    {
+        return Results.Unauthorized();
+    }
+    
+    var activities = activityLog
+        .OrderByDescending(a => a.Timestamp)
+        .Take(500)
+        .Select(a => new
+        {
+            a.UserId,
+            a.Action,
+            a.Details,
+            a.Timestamp
+        })
+        .ToList();
+    
+    LogActivity(userId, "VIEW_ACTIVITIES", $"Viewed {activities.Count} activities");
+    
+    return Results.Ok(new { activities, totalCount = activityLog.Count });
+})
+.WithName("GetActivities")
+.WithOpenApi();
+
+// Admin endpoint - Reset user activities - ADMIN ONLY
+app.MapPost("/api/admin/reset-user/{targetUserId}", (string targetUserId, HttpContext context) =>
+{
+    var adminUserId = context.Request.Query["adminUserId"].ToString();
+    if (!IsAdmin(adminUserId))
+    {
+        return Results.Unauthorized();
+    }
+    
+    if (string.IsNullOrWhiteSpace(targetUserId))
+    {
+        return Results.BadRequest(new { message = "User ID is required" });
+    }
+    
+    if (usageTracker.ContainsKey(targetUserId))
+    {
+        var usage = usageTracker[targetUserId];
+        usage.DailyCount = 0;
+        usage.LastResetDate = DateTime.UtcNow.Date;
+        
+        LogActivity(adminUserId, "RESET_USER", $"Reset activities for user {targetUserId}");
+        
+        return Results.Ok(new 
+        { 
+            success = true,
+            message = $"User {targetUserId} activities reset",
+            dailyCount = 0
+        });
+    }
+    
+    return Results.NotFound(new { message = "User not found" });
+})
+.WithName("ResetUserActivities")
+.WithOpenApi();
+
+// Admin endpoint - Reset all activities - ADMIN ONLY
+app.MapPost("/api/admin/reset-all", (HttpContext context) =>
+{
+    var adminUserId = context.Request.Query["adminUserId"].ToString();
+    if (!IsAdmin(adminUserId))
+    {
+        return Results.Unauthorized();
+    }
+    
+    foreach (var usage in usageTracker.Values)
+    {
+        usage.DailyCount = 0;
+        usage.LastResetDate = DateTime.UtcNow.Date;
+    }
+    
+    LogActivity(adminUserId, "RESET_ALL", "Reset all user activities");
+    
+    return Results.Ok(new 
+    { 
+        success = true,
+        message = "All user activities reset",
+        usersReset = usageTracker.Count
+    });
+})
+.WithName("ResetAllActivities")
+.WithOpenApi();
+
+// Admin endpoint - Set premium status with specific plan - ADMIN ONLY
+app.MapPost("/api/admin/set-premium-plan/{userId}", (string userId, PremiumPlanRequest request, HttpContext context) =>
+{
+    var adminUserId = context.Request.Query["adminUserId"].ToString();
+    if (!IsAdmin(adminUserId))
+    {
+        return Results.Unauthorized();
+    }
+    
     if (string.IsNullOrWhiteSpace(userId))
     {
         return Results.BadRequest(new { message = "User ID is required" });
@@ -268,6 +465,8 @@ app.MapPost("/api/admin/set-premium-plan/{userId}", (string userId, PremiumPlanR
     
     usage.DailyCount = 0; // Reset count
     
+    LogActivity(adminUserId, "SET_PREMIUM_PLAN", $"Set {request.PlanId} plan for user {userId}");
+    
     return Results.Ok(new 
     { 
         success = true, 
@@ -280,9 +479,15 @@ app.MapPost("/api/admin/set-premium-plan/{userId}", (string userId, PremiumPlanR
 .WithName("SetPremiumPlan")
 .WithOpenApi();
 
-// Admin endpoint - Grant credits to a user
-app.MapPost("/api/admin/grant-credits/{userId}", (string userId, GrantCreditsRequest request) =>
+// Admin endpoint - Grant credits to a user - ADMIN ONLY
+app.MapPost("/api/admin/grant-credits/{userId}", (string userId, GrantCreditsRequest request, HttpContext context) =>
 {
+    var adminUserId = context.Request.Query["adminUserId"].ToString();
+    if (!IsAdmin(adminUserId))
+    {
+        return Results.Unauthorized();
+    }
+    
     if (string.IsNullOrWhiteSpace(userId))
     {
         return Results.BadRequest(new { message = "User ID is required" });
@@ -313,6 +518,8 @@ app.MapPost("/api/admin/grant-credits/{userId}", (string userId, GrantCreditsReq
     // Add credits
     payload.CreditsRemaining += request.Credits;
     var newToken = tokenService.UpdateToken(payload);
+    
+    LogActivity(adminUserId, "GRANT_CREDITS", $"Granted {request.Credits} credits to user {userId}");
     
     return Results.Ok(new
     {
@@ -764,6 +971,9 @@ app.MapPost("/api/translate", async (TranslateRequest request) =>
             
             // Increment usage counter
             usage.DailyCount++;
+            
+            // Log activity
+            LogActivity(userId ?? "anonymous", "TRANSLATE", $"Translated: {request.Behavior.Substring(0, Math.Min(50, request.Behavior.Length))}...");
         }
 
         // Premium Feature 1: Advanced Behavior Analysis
@@ -1187,6 +1397,15 @@ public record ValidateTokenRequest(string CreditToken);
 // Admin request models
 public record PremiumPlanRequest(string PlanId); // "monthly", "yearly", "lifetime"
 public record GrantCreditsRequest(int Credits, string? ExistingToken = null);
+
+// Activity log entry
+public class ActivityLogEntry
+{
+    public string UserId { get; set; } = string.Empty;
+    public string Action { get; set; } = string.Empty;
+    public string Details { get; set; } = string.Empty;
+    public DateTime Timestamp { get; set; }
+}
 
 public class CreditTier
 {
