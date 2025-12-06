@@ -1,0 +1,12 @@
+{
+    "Rules":  [
+                  {
+                      "Prefix":  "events/",
+                      "Status":  "Enabled",
+                      "Id":  "DeleteOldEvents",
+                      "Expiration":  {
+                                         "Days":  90
+                                     }
+                  }
+              ]
+}

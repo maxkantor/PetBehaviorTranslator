@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import { FaPaw, FaUserShield, FaCrown, FaUsers, FaToggleOn, FaToggleOff, FaSync, FaCoins, FaGift, FaHistory, FaRedo, FaTrash } from 'react-icons/fa'
+import { FaPaw, FaUserShield, FaCrown, FaUsers, FaToggleOn, FaToggleOff, FaSync, FaCoins, FaGift, FaHistory, FaRedo, FaTrash, FaChartBar, FaCog, FaKey, FaEnvelope } from 'react-icons/fa'
 import { getUserId } from '../services/premiumService'
-import { checkAdmin, getAllUsers, setPremiumStatus, setPremiumPlan, removePremiumStatus, grantCredits, getActivities, resetUserActivities, resetAllActivities } from '../services/adminService'
+import { checkAdmin, getAllUsers, setPremiumStatus, setPremiumPlan, removePremiumStatus, grantCredits, getActivities, resetUserActivities, resetAllActivities, adminConnect, getAdminDashboard, updateAdminConfig, createOverrideToken } from '../services/adminService'
 import { getCreditToken } from '../services/creditService'
+import axios from 'axios'
 import styles from './Admin.module.css'
 
 function Admin() {
@@ -18,42 +19,97 @@ function Admin() {
   const [activities, setActivities] = useState([])
   const [showActivities, setShowActivities] = useState(false)
   const [isAdmin, setIsAdmin] = useState(false)
+  const [dashboardData, setDashboardData] = useState(null)
+  const [showConfigEditor, setShowConfigEditor] = useState(false)
+  const [showOverrideToken, setShowOverrideToken] = useState(false)
+  const [configData, setConfigData] = useState({ freeSearchLimit: 5, tiers: [], adminEmails: [] })
+  const [overrideForm, setOverrideForm] = useState({ targetUserId: '', targetEmail: '', credits: 0, expirySeconds: 86400 })
 
   useEffect(() => {
     const initializeAdmin = async () => {
       const userId = getUserId()
       setCurrentUserId(userId)
+      setLoading(true)
       try {
         // Check if user is admin first
         const adminStatus = await checkAdmin()
+        console.log('Admin check result:', adminStatus)
         setIsAdmin(adminStatus)
         
         if (!adminStatus) {
-          showMessage('Access denied. Admin access required. Set ADMIN_USER_ID environment variable to your user ID.', 'error')
+          // Try to get more info from the check endpoint
+          try {
+            const checkResponse = await axios.get(`${import.meta.env.VITE_API_URL || 'http://localhost:5001'}/api/admin/check`, { 
+              params: { userId } 
+            })
+            console.log('Admin check details:', checkResponse.data)
+            showMessage(checkResponse.data.message || 'Access denied. Admin access required. Set ADMIN_USER_ID environment variable to your user ID.', 'error')
+          } catch (checkError) {
+            showMessage('Access denied. Admin access required. Set ADMIN_USER_ID environment variable to your user ID.', 'error')
+          }
+          setLoading(false)
           return
+        }
+        
+        // Connect as admin and load dashboard
+        try {
+          await adminConnect()
+          await loadDashboard()
+        } catch (error) {
+          console.error('Error connecting as admin:', error)
         }
         
         await loadUsers()
       } catch (error) {
+        console.error('Admin initialization error:', error)
         if (error.response?.status === 401) {
           showMessage('Access denied. Admin access required. Set ADMIN_USER_ID environment variable to your user ID.', 'error')
           setIsAdmin(false)
         } else {
-          console.error('Failed to initialize admin:', error)
-          showMessage('Failed to load admin dashboard', 'error')
+          showMessage(`Failed to load admin dashboard: ${error.message}`, 'error')
         }
+      } finally {
+        setLoading(false)
       }
     }
     initializeAdmin()
   }, [])
+
+  const loadDashboard = async () => {
+    try {
+      const data = await getAdminDashboard()
+      setDashboardData(data)
+      if (data.summary) {
+        setConfigData({
+          freeSearchLimit: data.summary.freeSearchLimit || 5,
+          tiers: data.summary.tiers || [],
+          adminEmails: [] // Will be loaded separately if needed
+        })
+      }
+    } catch (error) {
+      console.error('Error loading dashboard:', error)
+      if (error.response?.status === 401) {
+        setIsAdmin(false)
+        showMessage('Access denied. Admin access required.', 'error')
+      }
+    }
+  }
 
   const loadUsers = async () => {
     setLoading(true)
     try {
       const data = await getAllUsers()
       setUsers(data.users || [])
+      console.log('Loaded users:', data.users)
     } catch (error) {
-      showMessage('Failed to load users', 'error')
+      console.error('Error loading users:', error)
+      console.error('Error response:', error.response?.data)
+      if (error.response?.status === 401) {
+        showMessage('Access denied. You are not an admin. Set ADMIN_USER_ID environment variable to your user ID.', 'error')
+        setIsAdmin(false)
+      } else {
+        showMessage(`Failed to load users: ${error.response?.data?.message || error.message}`, 'error')
+      }
     } finally {
       setLoading(false)
     }
@@ -195,8 +251,8 @@ function Admin() {
   const currentUser = users.find(u => u.userId === currentUserId)
   const isCurrentUserPremium = currentUser?.isPremium || false
 
-  // If not admin, show access denied message
-  if (!isAdmin && !loading) {
+  // If not admin and not loading, show access denied message
+  if (!isAdmin && !loading && currentUserId) {
     return (
       <div className={styles.container}>
         <div className={styles.header}>
@@ -225,6 +281,21 @@ function Admin() {
     )
   }
 
+  // Show loading state
+  if (loading && !isAdmin) {
+    return (
+      <div className={styles.container}>
+        <div className={styles.header}>
+          <div className={styles.iconContainer}>
+            <FaUserShield className={styles.adminIcon} />
+          </div>
+          <h1 className={styles.title}>Checking Admin Access...</h1>
+          <p className={styles.subtitle}>Please wait...</p>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className={styles.container}>
       {/* Header */}
@@ -242,6 +313,33 @@ function Admin() {
       {message && (
         <div className={`${styles.message} ${styles[messageType]}`}>
           {message}
+        </div>
+      )}
+
+      {/* Debug Info - Show admin status */}
+      {currentUserId && (
+        <div className={styles.section} style={{ marginBottom: '2rem' }}>
+          <div style={{ background: 'rgba(255,255,255,0.1)', padding: '1rem', borderRadius: '8px', fontSize: '0.9rem' }}>
+            <p><strong>Debug Info:</strong></p>
+            <p>Your User ID: <code>{currentUserId}</code></p>
+            <p>Admin Status: <strong>{isAdmin ? '✅ Admin' : '❌ Not Admin'}</strong></p>
+            <p>Loading: {loading ? 'Yes' : 'No'}</p>
+            <button 
+              onClick={async () => {
+                try {
+                  const status = await checkAdmin()
+                  setIsAdmin(status)
+                  showMessage(`Admin check: ${status ? 'You are an admin' : 'You are NOT an admin'}`, status ? 'success' : 'error')
+                } catch (error) {
+                  showMessage(`Admin check failed: ${error.message}`, 'error')
+                }
+              }}
+              className={styles.btnPrimary}
+              style={{ marginTop: '0.5rem' }}
+            >
+              Re-check Admin Status
+            </button>
+          </div>
         </div>
       )}
 
@@ -331,6 +429,205 @@ function Admin() {
           </div>
         </div>
       </div>
+
+      {/* Dashboard Summary */}
+      {dashboardData && dashboardData.summary && (
+        <div className={styles.section}>
+          <h2 className={styles.sectionTitle}>
+            <FaChartBar /> Dashboard Summary
+          </h2>
+          <div className={styles.summaryGrid}>
+            <div className={styles.summaryCard}>
+              <h3>Today's Translations</h3>
+              <p className={styles.summaryValue}>{dashboardData.summary.todaysTranslations || 0}</p>
+            </div>
+            <div className={styles.summaryCard}>
+              <h3>Today's Purchases</h3>
+              <p className={styles.summaryValue}>{dashboardData.summary.todaysPurchases || 0}</p>
+            </div>
+            <div className={styles.summaryCard}>
+              <h3>Active Tokens (Approx)</h3>
+              <p className={styles.summaryValue}>{dashboardData.summary.activeTokensApprox || 0}</p>
+            </div>
+            <div className={styles.summaryCard}>
+              <h3>Free Search Limit</h3>
+              <p className={styles.summaryValue}>{dashboardData.summary.freeSearchLimit || 5}</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Config Editor */}
+      <div className={styles.section}>
+        <h2 className={styles.sectionTitle}>
+          <FaCog /> Configuration
+        </h2>
+        <div className={styles.card}>
+          <button
+            onClick={() => setShowConfigEditor(!showConfigEditor)}
+            className={styles.btnPrimary}
+          >
+            {showConfigEditor ? 'Hide' : 'Show'} Config Editor
+          </button>
+          {showConfigEditor && (
+            <div style={{ marginTop: '1rem' }}>
+              <div style={{ marginBottom: '1rem' }}>
+                <label>Free Search Limit:</label>
+                <input
+                  type="number"
+                  min="0"
+                  value={configData.freeSearchLimit}
+                  onChange={(e) => setConfigData({ ...configData, freeSearchLimit: parseInt(e.target.value) || 5 })}
+                  style={{ marginLeft: '0.5rem', padding: '0.5rem', borderRadius: '4px', border: '1px solid #ccc' }}
+                />
+              </div>
+              <div style={{ marginBottom: '1rem' }}>
+                <label>Admin Emails (comma-separated):</label>
+                <input
+                  type="text"
+                  value={configData.adminEmails.join(', ')}
+                  onChange={(e) => setConfigData({ ...configData, adminEmails: e.target.value.split(',').map(e => e.trim()).filter(e => e) })}
+                  placeholder="admin@example.com, admin2@example.com"
+                  style={{ marginLeft: '0.5rem', padding: '0.5rem', borderRadius: '4px', border: '1px solid #ccc', width: '300px' }}
+                />
+              </div>
+              <button
+                onClick={async () => {
+                  try {
+                    await updateAdminConfig({
+                      freeSearchLimit: configData.freeSearchLimit,
+                      adminEmails: configData.adminEmails
+                    })
+                    showMessage('Configuration updated successfully', 'success')
+                    await loadDashboard()
+                  } catch (error) {
+                    showMessage('Failed to update configuration', 'error')
+                  }
+                }}
+                className={styles.btnPrimary}
+              >
+                Save Configuration
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Override Token Generator */}
+      <div className={styles.section}>
+        <h2 className={styles.sectionTitle}>
+          <FaKey /> Override Token Generator
+        </h2>
+        <div className={styles.card}>
+          <button
+            onClick={() => setShowOverrideToken(!showOverrideToken)}
+            className={styles.btnPrimary}
+          >
+            {showOverrideToken ? 'Hide' : 'Show'} Override Token Form
+          </button>
+          {showOverrideToken && (
+            <div style={{ marginTop: '1rem' }}>
+              <div style={{ marginBottom: '1rem' }}>
+                <label>Target User ID (optional):</label>
+                <input
+                  type="text"
+                  value={overrideForm.targetUserId}
+                  onChange={(e) => setOverrideForm({ ...overrideForm, targetUserId: e.target.value })}
+                  placeholder="user_123"
+                  style={{ marginLeft: '0.5rem', padding: '0.5rem', borderRadius: '4px', border: '1px solid #ccc', width: '200px' }}
+                />
+              </div>
+              <div style={{ marginBottom: '1rem' }}>
+                <label>Target Email (optional):</label>
+                <input
+                  type="email"
+                  value={overrideForm.targetEmail}
+                  onChange={(e) => setOverrideForm({ ...overrideForm, targetEmail: e.target.value })}
+                  placeholder="user@example.com"
+                  style={{ marginLeft: '0.5rem', padding: '0.5rem', borderRadius: '4px', border: '1px solid #ccc', width: '250px' }}
+                />
+              </div>
+              <div style={{ marginBottom: '1rem' }}>
+                <label>Credits to Grant:</label>
+                <input
+                  type="number"
+                  min="0"
+                  value={overrideForm.credits}
+                  onChange={(e) => setOverrideForm({ ...overrideForm, credits: parseInt(e.target.value) || 0 })}
+                  style={{ marginLeft: '0.5rem', padding: '0.5rem', borderRadius: '4px', border: '1px solid #ccc', width: '100px' }}
+                />
+              </div>
+              <div style={{ marginBottom: '1rem' }}>
+                <label>Expiry (seconds):</label>
+                <input
+                  type="number"
+                  min="60"
+                  value={overrideForm.expirySeconds}
+                  onChange={(e) => setOverrideForm({ ...overrideForm, expirySeconds: parseInt(e.target.value) || 86400 })}
+                  style={{ marginLeft: '0.5rem', padding: '0.5rem', borderRadius: '4px', border: '1px solid #ccc', width: '100px' }}
+                />
+                <span style={{ marginLeft: '0.5rem', fontSize: '0.9rem', opacity: 0.8 }}>
+                  ({Math.floor(overrideForm.expirySeconds / 3600)} hours)
+                </span>
+              </div>
+              <button
+                onClick={async () => {
+                  if (!overrideForm.targetUserId && !overrideForm.targetEmail) {
+                    showMessage('Please provide either User ID or Email', 'error')
+                    return
+                  }
+                  try {
+                    const result = await createOverrideToken(
+                      overrideForm.targetUserId || null,
+                      overrideForm.targetEmail || null,
+                      overrideForm.credits,
+                      overrideForm.expirySeconds
+                    )
+                    showMessage(`Override token created! Token: ${result.token.substring(0, 30)}...`, 'success')
+                    // Copy to clipboard if possible
+                    if (navigator.clipboard) {
+                      await navigator.clipboard.writeText(result.token)
+                      showMessage('Override token created and copied to clipboard!', 'success')
+                    }
+                  } catch (error) {
+                    showMessage('Failed to create override token', 'error')
+                  }
+                }}
+                className={styles.btnPrimary}
+              >
+                Generate Override Token
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Recent Events */}
+      {dashboardData && dashboardData.recentEvents && dashboardData.recentEvents.length > 0 && (
+        <div className={styles.section}>
+          <h2 className={styles.sectionTitle}>
+            <FaHistory /> Recent Events ({dashboardData.recentEvents.length})
+          </h2>
+          <div className={styles.eventsList}>
+            {dashboardData.recentEvents.map((event, idx) => (
+              <div key={idx} className={styles.eventItem}>
+                <div className={styles.eventTime}>
+                  {new Date(event.timestamp).toLocaleString()}
+                </div>
+                <div className={styles.eventUser}>
+                  {event.userId || 'N/A'}
+                </div>
+                <div className={styles.eventType}>
+                  {event.eventType}
+                </div>
+                <div className={styles.eventStatus}>
+                  {event.status}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Activities Section */}
       {showActivities && (

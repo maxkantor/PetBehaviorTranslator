@@ -6,6 +6,7 @@ import Admin from './pages/Admin'
 import PaymentSuccess from './pages/PaymentSuccess'
 import MockCheckout from './pages/MockCheckout'
 import Credits from './pages/Credits'
+import ProtectedAdminRoute from './components/ProtectedAdminRoute'
 import './App.css'
 
 function App() {
@@ -14,7 +15,11 @@ function App() {
       <Route path="/" element={<Home />} />
       <Route path="/premium" element={<Premium />} />
       <Route path="/support" element={<Support />} />
-      <Route path="/admin" element={<Admin />} />
+      <Route path="/admin" element={
+        <ProtectedAdminRoute>
+          <Admin />
+        </ProtectedAdminRoute>
+      } />
       <Route path="/payment/success" element={<PaymentSuccess />} />
       <Route path="/payment/mock-checkout" element={<MockCheckout />} />
       <Route path="/credits" element={<Credits />} />

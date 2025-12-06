@@ -3,20 +3,34 @@ import { getUserId } from './premiumService'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001'
 
-// Helper to add admin user ID to requests
+// Helper to get user email (if available)
+const getUserEmail = () => {
+  // Try to get from localStorage or other source
+  return localStorage.getItem('userEmail') || null
+}
+
+// Helper to add admin user ID and email to requests
 const getAdminParams = () => {
   const userId = getUserId()
-  return { params: { adminUserId: userId } }
+  const email = getUserEmail()
+  const params = { adminUserId: userId }
+  if (email) {
+    params.email = email
+  }
+  return { params }
 }
 
 // Check if current user is admin
 export const checkAdmin = async () => {
   try {
     const userId = getUserId()
+    console.log('Checking admin status for user:', userId)
     const response = await axios.get(`${API_URL}/api/admin/check`, { params: { userId } })
+    console.log('Admin check response:', response.data)
     return response.data.isAdmin || false
   } catch (error) {
     console.error('Error checking admin status:', error)
+    console.error('Error response:', error.response?.data)
     return false
   }
 }
@@ -138,6 +152,70 @@ export const resetAllActivities = async () => {
     return response.data
   } catch (error) {
     console.error('Error resetting all activities:', error)
+    throw error
+  }
+}
+
+// ============================================================================
+// NEW ADMIN ENDPOINTS - Enhanced Admin System
+// ============================================================================
+
+// POST /admin/connect - Connect as admin and get admin token
+export const adminConnect = async () => {
+  try {
+    const userId = getUserId()
+    const email = getUserEmail()
+    const response = await axios.post(`${API_URL}/api/admin/connect`, {
+      userId,
+      email
+    })
+    
+    // Store admin token if provided
+    if (response.data.adminToken) {
+      localStorage.setItem('adminToken', response.data.adminToken)
+    }
+    
+    return response.data
+  } catch (error) {
+    console.error('Error connecting as admin:', error)
+    throw error
+  }
+}
+
+// GET /admin/dashboard - Get dashboard data
+export const getAdminDashboard = async () => {
+  try {
+    const response = await axios.get(`${API_URL}/api/admin/dashboard`, getAdminParams())
+    return response.data
+  } catch (error) {
+    console.error('Error fetching admin dashboard:', error)
+    throw error
+  }
+}
+
+// POST /admin/config - Update admin configuration
+export const updateAdminConfig = async (config) => {
+  try {
+    const response = await axios.post(`${API_URL}/api/admin/config`, config, getAdminParams())
+    return response.data
+  } catch (error) {
+    console.error('Error updating admin config:', error)
+    throw error
+  }
+}
+
+// POST /admin/override-token - Create override token for a user
+export const createOverrideToken = async (targetUserId, targetEmail, credits, expirySeconds) => {
+  try {
+    const response = await axios.post(`${API_URL}/api/admin/override-token`, {
+      targetUserId,
+      targetEmail,
+      credits,
+      expirySeconds
+    }, getAdminParams())
+    return response.data
+  } catch (error) {
+    console.error('Error creating override token:', error)
     throw error
   }
 }
