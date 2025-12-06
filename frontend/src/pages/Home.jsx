@@ -3,7 +3,7 @@ import { FaPaw, FaBone, FaCat, FaDog, FaHeart, FaLightbulb, FaListOl, FaExclamat
 import { Link } from 'react-router-dom'
 import axios from 'axios'
 import { getUserId } from '../services/premiumService'
-import { getOrCreateToken, useCredit, getCreditBalance } from '../services/creditService'
+import { getOrCreateToken, useCredit, getCreditBalance, getCreditToken } from '../services/creditService'
 import { checkAdmin } from '../services/adminService'
 import CreditBalanceIndicator from '../components/CreditBalanceIndicator'
 import styles from './Home.module.css'
@@ -27,7 +27,9 @@ function Home() {
     freeSearchesRemaining: 0, 
     creditsRemaining: 0, 
     freeSearchesUsed: 0, 
-    freeSearchLimit: 5 
+    freeSearchLimit: 5,
+    isAdmin: false,
+    isAdminOverride: false
   })
   const [loadingBalance, setLoadingBalance] = useState(true)
   const [isAdmin, setIsAdmin] = useState(false)
@@ -37,15 +39,29 @@ function Home() {
     const loadBalance = async () => {
       try {
         const userId = getUserId()
-        // Get or create token if needed
-        await getOrCreateToken(userId)
+        
+        // Check if user is admin first
+        const adminStatus = await checkAdmin()
+        setIsAdmin(adminStatus)
+        
+        // If admin, try to connect and get admin token
+        if (adminStatus) {
+          try {
+            const { adminConnect } = await import('../services/adminService')
+            await adminConnect()
+            // Admin token is now stored, get token with admin flag
+            await getOrCreateToken(userId)
+          } catch (error) {
+            console.error('Error connecting as admin:', error)
+          }
+        } else {
+          // Get or create token if needed (non-admin)
+          await getOrCreateToken(userId)
+        }
+        
         // Load balance
         const balance = await getCreditBalance()
         setCreditBalance(balance)
-        
-        // Check if user is admin
-        const adminStatus = await checkAdmin()
-        setIsAdmin(adminStatus)
       } catch (error) {
         console.error('Error loading credit balance:', error)
       } finally {
@@ -61,43 +77,57 @@ function Home() {
       return
     }
 
-    // Check if user has credits available
-    const hasFreeSearches = creditBalance.freeSearchesRemaining > 0
-    const hasCredits = creditBalance.creditsRemaining > 0
-    
-    if (!hasFreeSearches && !hasCredits) {
-      setError('No free searches or credits remaining. Please purchase credits to continue.')
-      return
-    }
-
     setLoading(true)
     setError(null)
     setResults(null)
 
     try {
-      // Use a credit before making the translation request
-      const creditResult = await useCredit()
+      // Check if user is admin or has admin override - admins bypass credit checks
+      const userIsAdmin = isAdmin || creditBalance.isAdmin || creditBalance.isAdminOverride
       
-      if (!creditResult.success || creditResult.error === 'NO_CREDITS') {
-        setError(creditResult.message || 'No credits available. Please purchase credits to continue.')
-        // Refresh balance
-        const balance = await getCreditBalance()
-        setCreditBalance(balance)
-        setLoading(false)
-        return
+      if (!userIsAdmin) {
+        // Check if user has credits available (non-admins only)
+        const hasFreeSearches = creditBalance.freeSearchesRemaining > 0
+        const hasCredits = creditBalance.creditsRemaining > 0
+        
+        if (!hasFreeSearches && !hasCredits) {
+          setError('No free searches or credits remaining. Please purchase credits to continue.')
+          setLoading(false)
+          return
+        }
+
+        // Use a credit before making the translation request (non-admins only)
+        const creditResult = await useCredit()
+        
+        if (!creditResult.success || creditResult.error === 'NO_CREDITS') {
+          setError(creditResult.message || 'No credits available. Please purchase credits to continue.')
+          // Refresh balance
+          const balance = await getCreditBalance()
+          setCreditBalance(balance)
+          setLoading(false)
+          return
+        }
+
+        // Update balance from credit result (non-admins only)
+        setCreditBalance({
+          freeSearchesRemaining: creditResult.freeSearchLimit - creditResult.freeSearchesUsed,
+          creditsRemaining: creditResult.creditsRemaining || 0,
+          freeSearchesUsed: creditResult.freeSearchesUsed || 0,
+          freeSearchLimit: creditResult.freeSearchLimit || 5,
+          isAdmin: creditResult.isAdmin || false,
+          isAdminOverride: creditResult.isAdminOverride || false
+        })
       }
 
-      // Update balance from credit result
-      setCreditBalance({
-        freeSearchesRemaining: creditResult.freeSearchLimit - creditResult.freeSearchesUsed,
-        creditsRemaining: creditResult.creditsRemaining || 0,
-        freeSearchesUsed: creditResult.freeSearchesUsed || 0,
-        freeSearchLimit: creditResult.freeSearchLimit || 5
-      })
-
-      // Make translation request (no userId needed for credit system)
+      // Get credit token for translation request (backend will check admin bypass)
+      const creditToken = getCreditToken()
+      
+      // Make translation request with credit token (backend handles admin bypass)
       const response = await axios.post(`${API_URL}/api/translate`, {
-        behavior: behavior.trim()
+        behavior: behavior.trim(),
+        creditToken: creditToken,
+        userId: getUserId(),
+        email: localStorage.getItem('userEmail') || null
       })
       setResults(response.data)
       setError(null)
@@ -264,7 +294,7 @@ function Home() {
         {/* Credit Balance Display */}
         <div className={styles.usageDisplay}>
           <CreditBalanceIndicator />
-          {!loadingBalance && creditBalance.freeSearchesRemaining === 0 && creditBalance.creditsRemaining === 0 && (
+          {!loadingBalance && !isAdmin && creditBalance.freeSearchesRemaining === 0 && creditBalance.creditsRemaining === 0 && (
             <Link to="/credits" className={styles.upgradeLink}>
               Buy Credits
             </Link>

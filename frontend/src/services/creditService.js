@@ -39,9 +39,11 @@ export const getOrCreateToken = async (userId) => {
       }
     }
 
-    // Create new token
+    // Create new token (include email for admin detection)
+    const userEmail = localStorage.getItem('userEmail') || null
     const response = await axios.post(`${API_URL}/api/credits/get-token`, {
-      userId
+      userId,
+      email: userEmail
     })
 
     const { token } = response.data
@@ -165,7 +167,9 @@ export const getCreditBalance = async () => {
         freeSearchesRemaining: 0,
         creditsRemaining: 0,
         freeSearchesUsed: 0,
-        freeSearchLimit: 5
+        freeSearchLimit: 5,
+        isAdmin: false,
+        isAdminOverride: false
       }
     }
 
@@ -175,7 +179,9 @@ export const getCreditBalance = async () => {
         freeSearchesRemaining: 0,
         creditsRemaining: 0,
         freeSearchesUsed: 0,
-        freeSearchLimit: 5
+        freeSearchLimit: 5,
+        isAdmin: false,
+        isAdminOverride: false
       }
     }
 
@@ -183,7 +189,9 @@ export const getCreditBalance = async () => {
       freeSearchesRemaining: validation.freeSearchesRemaining || 0,
       creditsRemaining: validation.creditsRemaining || 0,
       freeSearchesUsed: validation.freeSearchesUsed || 0,
-      freeSearchLimit: validation.freeSearchLimit || 5
+      freeSearchLimit: validation.freeSearchLimit || 5,
+      isAdmin: validation.isAdmin || false,
+      isAdminOverride: validation.isAdminOverride || false
     }
   } catch (error) {
     console.error('Error getting credit balance:', error)
@@ -191,7 +199,9 @@ export const getCreditBalance = async () => {
       freeSearchesRemaining: 0,
       creditsRemaining: 0,
       freeSearchesUsed: 0,
-      freeSearchLimit: 5
+      freeSearchLimit: 5,
+      isAdmin: false,
+      isAdminOverride: false
     }
   }
 }

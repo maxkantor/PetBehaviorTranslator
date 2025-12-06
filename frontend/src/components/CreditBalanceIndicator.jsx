@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import { FaCoins, FaGift } from 'react-icons/fa'
+import { FaCoins, FaGift, FaUserShield } from 'react-icons/fa'
 import { getCreditBalance } from '../services/creditService'
+import { checkAdmin } from '../services/adminService'
 import styles from './CreditBalanceIndicator.module.css'
 
 function CreditBalanceIndicator() {
@@ -12,10 +13,21 @@ function CreditBalanceIndicator() {
     freeSearchLimit: 5
   })
   const [loading, setLoading] = useState(true)
+  const [isAdmin, setIsAdmin] = useState(false)
 
   useEffect(() => {
     loadBalance()
+    checkAdminStatus()
   }, [])
+
+  const checkAdminStatus = async () => {
+    try {
+      const adminStatus = await checkAdmin()
+      setIsAdmin(adminStatus)
+    } catch (error) {
+      console.error('Error checking admin status:', error)
+    }
+  }
 
   const loadBalance = async () => {
     try {
@@ -39,6 +51,18 @@ function CreditBalanceIndicator() {
       <div className={styles.container}>
         <div className={styles.badge}>
           <span className={styles.label}>Loading...</span>
+        </div>
+      </div>
+    )
+  }
+
+  // Show admin badge if user is admin
+  if (isAdmin) {
+    return (
+      <div className={styles.container}>
+        <div className={styles.badge} style={{ background: 'rgba(102, 126, 234, 0.2)', color: '#667eea', border: '1px solid #667eea' }}>
+          <FaUserShield className={styles.icon} />
+          <span className={styles.label}>Admin - Unlimited</span>
         </div>
       </div>
     )
