@@ -3,6 +3,7 @@ using System.Text.Json.Serialization;
 using System.Linq;
 using System.Net.Mail;
 using System.Net;
+using PetBehaviorTranslator;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -66,6 +67,17 @@ var adminUserId = Environment.GetEnvironmentVariable("ADMIN_USER_ID")
     ?? builder.Configuration["Admin:AdminUserId"] 
     ?? string.Empty;
 
+// Log admin configuration status (for debugging)
+Console.WriteLine($"[ADMIN CONFIG] Admin User ID configured: {!string.IsNullOrWhiteSpace(adminUserId)}");
+if (!string.IsNullOrWhiteSpace(adminUserId))
+{
+    Console.WriteLine($"[ADMIN CONFIG] Admin User ID: '{adminUserId}' (length: {adminUserId.Length})");
+}
+else
+{
+    Console.WriteLine("[ADMIN CONFIG] WARNING: ADMIN_USER_ID not set. Admin features will be disabled.");
+}
+
 // Initialize AWS SSM client for retrieving token secret
 string tokenSecret;
 try
@@ -89,7 +101,16 @@ catch (Exception ex)
 // Initialize TokenService
 var tokenService = new PetBehaviorTranslator.TokenService(tokenSecret);
 
-// Load credit tiers from configuration
+// Initialize AdminConfigService
+var adminConfigSsmParameter = builder.Configuration["Admin:AdminConfigSsmParameter"] 
+    ?? "/pettranslator/admin-config";
+var adminConfigService = new AdminConfigService(adminConfigSsmParameter);
+
+// Initialize EventLogService
+var eventLogBucket = Environment.GetEnvironmentVariable("EVENT_LOG_BUCKET");
+var eventLogService = new EventLogService(eventLogBucket);
+
+// Load credit tiers from configuration (will be overridden by admin config if available)
 var creditTiers = builder.Configuration.GetSection("CreditSystem:Tiers").Get<List<CreditTier>>() 
     ?? new List<CreditTier>();
 
@@ -113,34 +134,49 @@ var usageTracker = new Dictionary<string, UserUsage>();
 // Activity log for admin viewing
 var activityLog = new List<ActivityLogEntry>();
 
-// Helper function to check if user is admin
-bool IsAdmin(string userId)
+// Helper function to check if user is admin (supports both userId and email)
+async Task<bool> IsAdminAsync(string userId, string? email = null)
 {
-    if (string.IsNullOrWhiteSpace(adminUserId))
-    {
-        Console.WriteLine($"[ADMIN CHECK] Admin user ID not configured. Set ADMIN_USER_ID environment variable.");
-        return false;
-    }
-    
     if (string.IsNullOrWhiteSpace(userId))
     {
         Console.WriteLine($"[ADMIN CHECK] User ID is empty.");
         return false;
     }
     
-    // Trim and compare (case-sensitive for security)
-    var isAdmin = userId.Trim() == adminUserId.Trim();
-    
-    if (!isAdmin)
+    // Check legacy ADMIN_USER_ID (backwards compatibility)
+    if (!string.IsNullOrWhiteSpace(adminUserId) && userId.Trim() == adminUserId.Trim())
     {
-        Console.WriteLine($"[ADMIN CHECK] Access denied. User ID: '{userId.Trim()}', Admin ID: '{adminUserId.Trim()}'");
-    }
-    else
-    {
-        Console.WriteLine($"[ADMIN CHECK] Admin access granted for user: '{userId.Trim()}'");
+        Console.WriteLine($"[ADMIN CHECK] Admin access granted via ADMIN_USER_ID for user: '{userId.Trim()}'");
+        return true;
     }
     
-    return isAdmin;
+    // Check admin email list from SSM config
+    if (!string.IsNullOrWhiteSpace(email))
+    {
+        var isAdminEmail = await adminConfigService.IsAdminEmailAsync(email);
+        if (isAdminEmail)
+        {
+            Console.WriteLine($"[ADMIN CHECK] Admin access granted via email for: '{email}'");
+            return true;
+        }
+    }
+    
+    // Check if token has admin flag
+    // (This will be checked in endpoints that receive tokens)
+    
+    Console.WriteLine($"[ADMIN CHECK] Access denied. User ID: '{userId.Trim()}'");
+    return false;
+}
+
+// Synchronous wrapper for backwards compatibility
+bool IsAdmin(string userId)
+{
+    // For sync calls, only check ADMIN_USER_ID
+    if (string.IsNullOrWhiteSpace(adminUserId))
+    {
+        return false;
+    }
+    return userId.Trim() == adminUserId.Trim();
 }
 
 // Helper function to log activity
@@ -533,6 +569,239 @@ app.MapPost("/api/admin/grant-credits/{userId}", (string userId, GrantCreditsReq
 .WithName("GrantCredits")
 .WithOpenApi();
 
+// ============================================================================
+// NEW ADMIN ENDPOINTS - Enhanced Admin System
+// ============================================================================
+
+// POST /admin/connect - Admin connect endpoint
+app.MapPost("/api/admin/connect", async (AdminConnectRequest request) =>
+{
+    if (string.IsNullOrWhiteSpace(request.UserId))
+    {
+        return Results.BadRequest(new { message = "UserId is required" });
+    }
+
+    // Check if user is admin
+    var isAdmin = await IsAdminAsync(request.UserId, request.Email);
+    if (!isAdmin)
+    {
+        return Results.Json(new { message = "Admin access required" }, statusCode: 401);
+    }
+
+    // Get current config
+    var config = await adminConfigService.GetConfigAsync();
+    
+    // Create admin token with large expiry
+    var adminToken = tokenService.CreateToken(
+        request.UserId,
+        freeSearchesUsed: 0,
+        creditsRemaining: 0,
+        isAdmin: true,
+        isAdminOverride: false,
+        customExpiresAt: DateTimeOffset.UtcNow.AddDays(30).ToUnixTimeSeconds()
+    );
+
+    // Get dashboard summary
+    var summary = await eventLogService.GetSummaryAsync();
+
+    return Results.Ok(new
+    {
+        success = true,
+        adminToken,
+        summary = new
+        {
+            todaysTranslations = summary.TodaysTranslations,
+            todaysPurchases = summary.TodaysPurchases,
+            activeTokensApprox = summary.ActiveTokensApprox,
+            freeSearchLimit = config.FreeSearchLimit,
+            tiers = config.Tiers.Count > 0 ? config.Tiers : creditTiers
+        }
+    });
+})
+.WithName("AdminConnect")
+.WithOpenApi();
+
+// GET /admin/dashboard - Get dashboard data
+app.MapGet("/api/admin/dashboard", async (HttpContext context) =>
+{
+    var userId = context.Request.Query["adminUserId"].ToString();
+    var email = context.Request.Query["email"].ToString();
+    
+    var isAdmin = await IsAdminAsync(userId, email);
+    if (!isAdmin)
+    {
+        return Results.Json(new { message = "Admin access required" }, statusCode: 401);
+    }
+
+    var config = await adminConfigService.GetConfigAsync();
+    var summary = await eventLogService.GetSummaryAsync();
+    var recentEvents = await eventLogService.GetRecentEventsAsync(200);
+
+    return Results.Ok(new
+    {
+        summary = new
+        {
+            todaysTranslations = summary.TodaysTranslations,
+            todaysPurchases = summary.TodaysPurchases,
+            activeTokensApprox = summary.ActiveTokensApprox,
+            freeSearchLimit = config.FreeSearchLimit,
+            tiers = config.Tiers.Count > 0 ? config.Tiers : creditTiers
+        },
+        recentEvents = recentEvents.Select(e => new
+        {
+            timestamp = e.Timestamp,
+            userId = MaskUserId(e.UserId),
+            email = MaskEmail(e.Email),
+            eventType = e.EventType,
+            endpoint = e.Endpoint,
+            status = e.Status,
+            details = e.Details
+        }).ToList()
+    });
+})
+.WithName("AdminDashboard")
+.WithOpenApi();
+
+// POST /admin/config - Update admin configuration
+app.MapPost("/api/admin/config", async (AdminConfigUpdateRequest request, HttpContext context) =>
+{
+    var userId = context.Request.Query["adminUserId"].ToString();
+    var email = context.Request.Query["email"].ToString();
+    
+    var isAdmin = await IsAdminAsync(userId, email);
+    if (!isAdmin)
+    {
+        return Results.Json(new { message = "Admin access required" }, statusCode: 401);
+    }
+
+    // Get current config
+    var config = await adminConfigService.GetConfigAsync();
+
+    // Update config
+    if (request.FreeSearchLimit.HasValue)
+    {
+        config.FreeSearchLimit = request.FreeSearchLimit.Value;
+    }
+    if (request.Tiers != null && request.Tiers.Count > 0)
+    {
+        config.Tiers = request.Tiers;
+    }
+    if (request.AdminEmails != null)
+    {
+        config.AdminEmails = request.AdminEmails;
+    }
+
+    // Save to SSM
+    await adminConfigService.SaveConfigAsync(config);
+
+    // Update local creditTiers for immediate use
+    if (request.Tiers != null && request.Tiers.Count > 0)
+    {
+        creditTiers = request.Tiers;
+    }
+    if (request.FreeSearchLimit.HasValue)
+    {
+        freeSearchLimit = request.FreeSearchLimit.Value;
+    }
+
+    await eventLogService.LogEventAsync(new EventLogEntry
+    {
+        EventType = "ADMIN_CONFIG_UPDATE",
+        UserId = userId,
+        Email = email,
+        Status = "SUCCESS",
+        Details = $"Updated config: FreeSearchLimit={config.FreeSearchLimit}, Tiers={config.Tiers.Count}, AdminEmails={config.AdminEmails.Count}"
+    });
+
+    return Results.Ok(new
+    {
+        success = true,
+        config = new
+        {
+            freeSearchLimit = config.FreeSearchLimit,
+            tiers = config.Tiers,
+            adminEmails = config.AdminEmails
+        }
+    });
+})
+.WithName("AdminConfigUpdate")
+.WithOpenApi();
+
+// POST /admin/override-token - Create override token for a user
+app.MapPost("/api/admin/override-token", async (AdminOverrideTokenRequest request, HttpContext context) =>
+{
+    var adminUserId = context.Request.Query["adminUserId"].ToString();
+    var adminEmail = context.Request.Query["email"].ToString();
+    
+    var isAdmin = await IsAdminAsync(adminUserId, adminEmail);
+    if (!isAdmin)
+    {
+        return Results.Json(new { message = "Admin access required" }, statusCode: 401);
+    }
+
+    if (string.IsNullOrWhiteSpace(request.TargetUserId) && string.IsNullOrWhiteSpace(request.TargetEmail))
+    {
+        return Results.BadRequest(new { message = "TargetUserId or TargetEmail is required" });
+    }
+
+    var targetUserId = request.TargetUserId ?? $"email_{request.TargetEmail?.Replace("@", "_at_")}";
+    var expirySeconds = request.ExpirySeconds ?? 86400; // Default 24 hours
+    var expiryTime = DateTimeOffset.UtcNow.AddSeconds(expirySeconds).ToUnixTimeSeconds();
+
+    // Create override token
+    var overrideToken = tokenService.CreateToken(
+        targetUserId,
+        freeSearchesUsed: 0,
+        creditsRemaining: request.Credits ?? 0,
+        isAdmin: false,
+        isAdminOverride: true,
+        customExpiresAt: expiryTime
+    );
+
+    await eventLogService.LogEventAsync(new EventLogEntry
+    {
+        EventType = "ADMIN_OVERRIDE_TOKEN",
+        UserId = adminUserId,
+        Email = adminEmail,
+        Status = "SUCCESS",
+        Details = $"Created override token for {targetUserId}, credits={request.Credits}, expiry={expirySeconds}s"
+    });
+
+    return Results.Ok(new
+    {
+        success = true,
+        token = overrideToken,
+        targetUserId,
+        credits = request.Credits ?? 0,
+        expiresAt = expiryTime,
+        expiresInSeconds = expirySeconds,
+        message = $"Override token created for {targetUserId}"
+    });
+})
+.WithName("AdminOverrideToken")
+.WithOpenApi();
+
+// Helper function to mask user ID for privacy
+string MaskUserId(string userId)
+{
+    if (string.IsNullOrWhiteSpace(userId) || userId.Length <= 8)
+        return userId;
+    return userId.Substring(0, 4) + "***" + userId.Substring(userId.Length - 4);
+}
+
+// Helper function to mask email for privacy
+string? MaskEmail(string? email)
+{
+    if (string.IsNullOrWhiteSpace(email))
+        return null;
+    var parts = email.Split('@');
+    if (parts.Length != 2)
+        return email;
+    if (parts[0].Length <= 2)
+        return parts[0] + "***@" + parts[1];
+    return parts[0].Substring(0, 2) + "***@" + parts[1];
+}
+
 // Premium Feature 2: Priority Support
 // In-memory support tickets (replace with database in production)
 var supportTickets = new List<SupportTicket>();
@@ -716,15 +985,34 @@ app.MapPost("/api/payment/complete", (PaymentCompleteRequest request) =>
 // ============================================================================
 
 // 1. GET /credits/get-token - Create or retrieve a credit token for a user
-app.MapPost("/api/credits/get-token", (GetTokenRequest request) =>
+app.MapPost("/api/credits/get-token", async (GetTokenRequest request) =>
 {
     if (string.IsNullOrWhiteSpace(request.UserId))
     {
         return Results.BadRequest(new { message = "UserId is required" });
     }
 
-    // Create new token with initial values
-    var token = tokenService.CreateToken(request.UserId, freeSearchesUsed: 0, creditsRemaining: 0);
+    // Check if user is admin
+    var isAdmin = await IsAdminAsync(request.UserId, request.Email);
+    var config = await adminConfigService.GetConfigAsync();
+    var effectiveFreeLimit = config.FreeSearchLimit > 0 ? config.FreeSearchLimit : freeSearchLimit;
+
+    // Create token - if admin, mark as admin token
+    var token = tokenService.CreateToken(
+        request.UserId, 
+        freeSearchesUsed: 0, 
+        creditsRemaining: 0,
+        isAdmin: isAdmin
+    );
+
+    await eventLogService.LogEventAsync(new EventLogEntry
+    {
+        EventType = "TOKEN_ISSUED",
+        UserId = request.UserId,
+        Email = request.Email,
+        Status = "SUCCESS",
+        Details = $"Token issued, isAdmin={isAdmin}"
+    });
     
     return Results.Ok(new
     {
@@ -732,14 +1020,15 @@ app.MapPost("/api/credits/get-token", (GetTokenRequest request) =>
         userId = request.UserId,
         freeSearchesUsed = 0,
         creditsRemaining = 0,
-        freeSearchLimit = freeSearchLimit
+        freeSearchLimit = effectiveFreeLimit,
+        isAdmin = isAdmin
     });
 })
 .WithName("GetCreditToken")
 .WithOpenApi();
 
 // 2. POST /credits/use - Use a free search or credit
-app.MapPost("/api/credits/use", (UseCreditsRequest request) =>
+app.MapPost("/api/credits/use", async (UseCreditsRequest request) =>
 {
     if (string.IsNullOrWhiteSpace(request.CreditToken))
     {
@@ -753,18 +1042,53 @@ app.MapPost("/api/credits/use", (UseCreditsRequest request) =>
         return Results.Unauthorized();
     }
 
+    // Check for admin bypass
+    if (payload.IsAdmin || payload.IsAdminOverride)
+    {
+        // Admin bypass - return token unchanged, no credit deduction
+        await eventLogService.LogEventAsync(new EventLogEntry
+        {
+            EventType = "CREDIT_USE",
+            UserId = payload.UserId,
+            Status = "SUCCESS",
+            Details = $"Admin bypass - no credit deducted"
+        });
+
+        return Results.Ok(new
+        {
+            token = request.CreditToken, // Return same token
+            freeSearchesUsed = payload.FreeSearchesUsed,
+            creditsRemaining = payload.CreditsRemaining,
+            freeSearchLimit = freeSearchLimit,
+            adminBypass = true,
+            message = "Admin bypass - unlimited access"
+        });
+    }
+
+    // Get current config for free search limit
+    var config = await adminConfigService.GetConfigAsync();
+    var effectiveFreeLimit = config.FreeSearchLimit > 0 ? config.FreeSearchLimit : freeSearchLimit;
+
     // Check if user has free searches remaining
-    if (payload.FreeSearchesUsed < freeSearchLimit)
+    if (payload.FreeSearchesUsed < effectiveFreeLimit)
     {
         payload.FreeSearchesUsed++;
         var newToken = tokenService.UpdateToken(payload);
         
+        await eventLogService.LogEventAsync(new EventLogEntry
+        {
+            EventType = "CREDIT_USE",
+            UserId = payload.UserId,
+            Status = "SUCCESS",
+            Details = $"Used free search ({payload.FreeSearchesUsed}/{effectiveFreeLimit})"
+        });
+
         return Results.Ok(new
         {
             token = newToken,
             freeSearchesUsed = payload.FreeSearchesUsed,
             creditsRemaining = payload.CreditsRemaining,
-            freeSearchLimit = freeSearchLimit,
+            freeSearchLimit = effectiveFreeLimit,
             usedFreeSearch = true
         });
     }
@@ -775,24 +1099,40 @@ app.MapPost("/api/credits/use", (UseCreditsRequest request) =>
         payload.CreditsRemaining--;
         var newToken = tokenService.UpdateToken(payload);
         
+        await eventLogService.LogEventAsync(new EventLogEntry
+        {
+            EventType = "CREDIT_USE",
+            UserId = payload.UserId,
+            Status = "SUCCESS",
+            Details = $"Used paid credit ({payload.CreditsRemaining} remaining)"
+        });
+
         return Results.Ok(new
         {
             token = newToken,
             freeSearchesUsed = payload.FreeSearchesUsed,
             creditsRemaining = payload.CreditsRemaining,
-            freeSearchLimit = freeSearchLimit,
+            freeSearchLimit = effectiveFreeLimit,
             usedCredit = true
         });
     }
 
     // No credits remaining
+    await eventLogService.LogEventAsync(new EventLogEntry
+    {
+        EventType = "CREDIT_USE",
+        UserId = payload.UserId,
+        Status = "NO_CREDITS",
+        Details = "No credits remaining"
+    });
+
     return Results.Ok(new
     {
         error = "NO_CREDITS",
         message = "No free searches or credits remaining. Please purchase credits to continue.",
         freeSearchesUsed = payload.FreeSearchesUsed,
         creditsRemaining = payload.CreditsRemaining,
-        freeSearchLimit = freeSearchLimit
+        freeSearchLimit = effectiveFreeLimit
     });
 })
 .WithName("UseCredits")
@@ -835,7 +1175,7 @@ app.MapPost("/api/credits/purchase", (PurchaseCreditsRequest request) =>
 .WithOpenApi();
 
 // 4. POST /credits/complete-purchase - Complete credit purchase and update token
-app.MapPost("/api/credits/complete-purchase", (CompletePurchaseRequest request) =>
+app.MapPost("/api/credits/complete-purchase", async (CompletePurchaseRequest request) =>
 {
     if (request.TierId <= 0 || string.IsNullOrWhiteSpace(request.ExistingToken))
     {
@@ -849,8 +1189,12 @@ app.MapPost("/api/credits/complete-purchase", (CompletePurchaseRequest request) 
         return Results.BadRequest(new { message = "Invalid token" });
     }
 
+    // Get current config for tiers
+    var config = await adminConfigService.GetConfigAsync();
+    var effectiveTiers = config.Tiers.Count > 0 ? config.Tiers : creditTiers;
+
     // Find the tier
-    var tier = creditTiers.FirstOrDefault(t => t.Id == request.TierId);
+    var tier = effectiveTiers.FirstOrDefault(t => t.Id == request.TierId);
     if (tier == null)
     {
         return Results.BadRequest(new { message = "Invalid tier ID" });
@@ -859,6 +1203,14 @@ app.MapPost("/api/credits/complete-purchase", (CompletePurchaseRequest request) 
     // Add credits to token
     payload.CreditsRemaining += tier.Credits;
     var newToken = tokenService.UpdateToken(payload);
+
+    await eventLogService.LogEventAsync(new EventLogEntry
+    {
+        EventType = "PURCHASE",
+        UserId = payload.UserId,
+        Status = "SUCCESS",
+        Details = $"Purchased {tier.Credits} credits from tier {tier.Name}"
+    });
 
     return Results.Ok(new
     {
@@ -874,19 +1226,23 @@ app.MapPost("/api/credits/complete-purchase", (CompletePurchaseRequest request) 
 .WithOpenApi();
 
 // 5. GET /credits/tiers - Get available credit tiers
-app.MapGet("/api/credits/tiers", () =>
+app.MapGet("/api/credits/tiers", async () =>
 {
+    var config = await adminConfigService.GetConfigAsync();
+    var effectiveTiers = config.Tiers.Count > 0 ? config.Tiers : creditTiers;
+    var effectiveFreeLimit = config.FreeSearchLimit > 0 ? config.FreeSearchLimit : freeSearchLimit;
+    
     return Results.Ok(new
     {
-        tiers = creditTiers,
-        freeSearchLimit = freeSearchLimit
+        tiers = effectiveTiers,
+        freeSearchLimit = effectiveFreeLimit
     });
 })
 .WithName("GetCreditTiers")
 .WithOpenApi();
 
 // 6. POST /credits/validate - Validate token and return current state
-app.MapPost("/api/credits/validate", (ValidateTokenRequest request) =>
+app.MapPost("/api/credits/validate", async (ValidateTokenRequest request) =>
 {
     if (string.IsNullOrWhiteSpace(request.CreditToken))
     {
@@ -899,14 +1255,19 @@ app.MapPost("/api/credits/validate", (ValidateTokenRequest request) =>
         return Results.Unauthorized();
     }
 
+    var config = await adminConfigService.GetConfigAsync();
+    var effectiveFreeLimit = config.FreeSearchLimit > 0 ? config.FreeSearchLimit : freeSearchLimit;
+
     return Results.Ok(new
     {
         valid = true,
         userId = payload.UserId,
         freeSearchesUsed = payload.FreeSearchesUsed,
         creditsRemaining = payload.CreditsRemaining,
-        freeSearchLimit = freeSearchLimit,
-        freeSearchesRemaining = Math.Max(0, freeSearchLimit - payload.FreeSearchesUsed),
+        freeSearchLimit = effectiveFreeLimit,
+        freeSearchesRemaining = Math.Max(0, effectiveFreeLimit - payload.FreeSearchesUsed),
+        isAdmin = payload.IsAdmin,
+        isAdminOverride = payload.IsAdminOverride,
         issuedAt = payload.IssuedAt,
         expiresAt = payload.ExpiresAt
     });
@@ -924,65 +1285,61 @@ app.MapPost("/api/translate", async (TranslateRequest request) =>
             return Results.BadRequest(new { message = "Behavior description is required" });
         }
         
-        // Check usage limits and determine if premium
+        // Check credit token and admin bypass
+        bool isAdmin = false;
+        bool isAdminOverride = false;
         string? userId = request.UserId;
-        bool isPremium = false;
         
-        if (!string.IsNullOrWhiteSpace(userId))
+        // If credit token provided, validate it and check for admin bypass
+        if (!string.IsNullOrWhiteSpace(request.CreditToken))
         {
-            if (!usageTracker.ContainsKey(userId))
+            var payload = tokenService.ValidateToken(request.CreditToken);
+            if (payload != null)
             {
-                usageTracker[userId] = new UserUsage { UserId = userId };
+                userId = payload.UserId;
+                isAdmin = payload.IsAdmin;
+                isAdminOverride = payload.IsAdminOverride;
+                
+                // Admin bypass - skip credit checks
+                if (!isAdmin && !isAdminOverride)
+                {
+                    // For non-admins, credit should have been consumed by /credits/use endpoint
+                    // But we log the translation event here
+                }
             }
-            
-            var usage = usageTracker[userId];
-            var today = DateTime.UtcNow.Date;
-            
-            // Reset daily count if new day
-            if (usage.LastResetDate < today)
-            {
-                usage.DailyCount = 0;
-                usage.LastResetDate = today;
-            }
-            
-            // Check premium expiration
-            if (usage.IsPremium && usage.PremiumExpiresAt.HasValue && usage.PremiumExpiresAt.Value < DateTime.UtcNow)
-            {
-                usage.IsPremium = false;
-                usage.PremiumExpiresAt = null;
-            }
-            
-            isPremium = usage.IsPremium;
-            
-            // Check daily limit for free users
-            if (!isPremium && usage.DailyCount >= 5)
-            {
-                return Results.Problem(
-                    detail: "Daily limit reached. Upgrade to Premium for unlimited translations!",
-                    statusCode: 429,
-                    title: "Daily Limit Exceeded",
-                    extensions: new Dictionary<string, object?>
-                    {
-                        { "dailyLimit", 5 },
-                        { "upgradeRequired", true }
-                    }
-                );
-            }
-            
-            // Increment usage counter
-            usage.DailyCount++;
-            
-            // Log activity
-            LogActivity(userId ?? "anonymous", "TRANSLATE", $"Translated: {request.Behavior.Substring(0, Math.Min(50, request.Behavior.Length))}...");
         }
+        
+        // Check if user is admin (via email or userId)
+        if (!isAdmin && !string.IsNullOrWhiteSpace(userId))
+        {
+            isAdmin = await IsAdminAsync(userId, request.Email);
+        }
+        
+        // Log translation event
+        await eventLogService.LogEventAsync(new EventLogEntry
+        {
+            EventType = "TRANSLATE",
+            UserId = userId ?? "anonymous",
+            Email = request.Email,
+            Endpoint = "/api/translate",
+            Status = "SUCCESS",
+            Details = $"Translated: {request.Behavior.Substring(0, Math.Min(50, request.Behavior.Length))}..."
+        });
+        
+        // Legacy activity log (for backwards compatibility)
+        LogActivity(userId ?? "anonymous", "TRANSLATE", $"Translated: {request.Behavior.Substring(0, Math.Min(50, request.Behavior.Length))}...");
+        
+        // Determine if premium (for prompt quality)
+        // Admins get premium-quality prompts
+        bool isPremium = isAdmin || isAdminOverride;
 
         // Premium Feature 1: Advanced Behavior Analysis
-        // Premium users get enhanced analysis with more detailed insights
+        // Premium users and admins get enhanced analysis with more detailed insights
         string prompt;
         string model;
         int maxTokens;
         
-        if (isPremium)
+        if (isPremium || isAdmin || isAdminOverride)
         {
             // Advanced analysis for premium users
             prompt = $@"You are a certified veterinary behaviorist with 20+ years of experience. Provide a comprehensive, in-depth analysis of this pet behavior:
@@ -1373,7 +1730,7 @@ else
 }
 
 // Request/Response models
-public record TranslateRequest(string Behavior, string? UserId = null);
+public record TranslateRequest(string Behavior, string? UserId = null, string? CreditToken = null, string? Email = null);
 
 public record PremiumStatusRequest(string UserId, bool IsPremium, DateTime? ExpiresAt = null);
 
@@ -1384,7 +1741,7 @@ public record PaymentRequest(string UserId, string PlanId);
 public record PaymentCompleteRequest(string UserId, string PlanId, string? TransactionId = null);
 
 // Credit System Records
-public record GetTokenRequest(string UserId);
+public record GetTokenRequest(string UserId, string? Email = null);
 
 public record UseCreditsRequest(string CreditToken);
 
@@ -1397,6 +1754,13 @@ public record ValidateTokenRequest(string CreditToken);
 // Admin request models
 public record PremiumPlanRequest(string PlanId); // "monthly", "yearly", "lifetime"
 public record GrantCreditsRequest(int Credits, string? ExistingToken = null);
+
+// New Admin request models
+public record AdminConnectRequest(string UserId, string? Email = null);
+
+public record AdminConfigUpdateRequest(int? FreeSearchLimit = null, List<CreditTier>? Tiers = null, List<string>? AdminEmails = null);
+
+public record AdminOverrideTokenRequest(string? TargetUserId = null, string? TargetEmail = null, int? Credits = null, int? ExpirySeconds = null);
 
 // Activity log entry
 public class ActivityLogEntry

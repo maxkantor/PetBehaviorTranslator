@@ -24,15 +24,17 @@ public class TokenService
     /// <summary>
     /// Creates a new token for a user with initial values.
     /// </summary>
-    public string CreateToken(string userId, int freeSearchesUsed = 0, int creditsRemaining = 0)
+    public string CreateToken(string userId, int freeSearchesUsed = 0, int creditsRemaining = 0, bool isAdmin = false, bool isAdminOverride = false, long? customExpiresAt = null)
     {
         var payload = new TokenPayload
         {
             UserId = userId,
             FreeSearchesUsed = freeSearchesUsed,
             CreditsRemaining = creditsRemaining,
+            IsAdmin = isAdmin,
+            IsAdminOverride = isAdminOverride,
             IssuedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
-            ExpiresAt = DateTimeOffset.UtcNow.AddYears(1).ToUnixTimeSeconds() // 1 year expiry
+            ExpiresAt = customExpiresAt ?? DateTimeOffset.UtcNow.AddYears(1).ToUnixTimeSeconds() // 1 year expiry or custom
         };
 
         return SignToken(payload);
@@ -118,6 +120,8 @@ public class TokenPayload
     public string UserId { get; set; } = string.Empty;
     public int FreeSearchesUsed { get; set; } = 0;
     public int CreditsRemaining { get; set; } = 0;
+    public bool IsAdmin { get; set; } = false;
+    public bool IsAdminOverride { get; set; } = false;
     public long IssuedAt { get; set; }
     public long ExpiresAt { get; set; }
 }
