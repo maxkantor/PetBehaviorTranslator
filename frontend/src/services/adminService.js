@@ -223,6 +223,20 @@ export const updateAdminConfig = async (config) => {
   }
 }
 
+// POST /admin/set-my-credits - Set current admin's credits to specific amount
+export const setMyCredits = async (credits, existingToken = null) => {
+  try {
+    const response = await axios.post(`${API_URL}/api/admin/set-my-credits`, {
+      credits,
+      existingToken
+    }, getAdminParams())
+    return response.data
+  } catch (error) {
+    console.error('Error setting credits:', error)
+    throw error
+  }
+}
+
 // POST /admin/override-token - Create override token for a user
 export const createOverrideToken = async (targetUserId, targetEmail, credits, expirySeconds) => {
   try {

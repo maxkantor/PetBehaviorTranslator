@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { FaPaw, FaUserShield, FaCrown, FaUsers, FaToggleOn, FaToggleOff, FaSync, FaCoins, FaGift, FaHistory, FaRedo, FaTrash, FaChartBar, FaCog, FaKey, FaEnvelope, FaSignOutAlt } from 'react-icons/fa'
 import { getUserId } from '../services/premiumService'
-import { checkAdmin, getAllUsers, setPremiumStatus, setPremiumPlan, removePremiumStatus, grantCredits, getActivities, resetUserActivities, resetAllActivities, adminConnect, getAdminDashboard, updateAdminConfig, createOverrideToken, adminLogout } from '../services/adminService'
+import { checkAdmin, getAllUsers, setPremiumStatus, setPremiumPlan, removePremiumStatus, grantCredits, getActivities, resetUserActivities, resetAllActivities, adminConnect, getAdminDashboard, updateAdminConfig, createOverrideToken, adminLogout, setMyCredits } from '../services/adminService'
 import { getCreditToken } from '../services/creditService'
 import axios from 'axios'
 import styles from './Admin.module.css'
@@ -37,40 +37,16 @@ function Admin() {
       setCurrentUserId(userId)
       setLoading(true)
       try {
-        // Check if user is admin first
-        const adminStatus = await checkAdmin()
-        console.log('Admin check result:', adminStatus)
-        setIsAdmin(adminStatus)
-        
-        if (!adminStatus) {
-          // Try to get more info from the check endpoint
-          try {
-            const checkResponse = await axios.get(`${import.meta.env.VITE_API_URL || 'http://localhost:5001'}/api/admin/check`, { 
-              params: { userId } 
-            })
-            console.log('Admin check details:', checkResponse.data)
-            showMessage(checkResponse.data.message || 'Access denied. Admin access required. Set ADMIN_USER_ID environment variable to your user ID.', 'error')
-          } catch (checkError) {
-            showMessage('Access denied. Admin access required. Set ADMIN_USER_ID environment variable to your user ID.', 'error')
-          }
-          setLoading(false)
-          return
-        }
-        
-        // Connect as admin and load dashboard
-        try {
-          await adminConnect()
-          await loadDashboard()
-        } catch (error) {
-          console.error('Error connecting as admin:', error)
-        }
-        
+        // User is already authenticated via session (ProtectedAdminRoute handles that)
+        // Just load dashboard data
+        await loadDashboard()
         await loadUsers()
+        setIsAdmin(true) // If they got here, they're authenticated
       } catch (error) {
         console.error('Admin initialization error:', error)
         if (error.response?.status === 401) {
-          showMessage('Access denied. Admin access required. Set ADMIN_USER_ID environment variable to your user ID.', 'error')
-          setIsAdmin(false)
+          showMessage('Session expired. Please log in again.', 'error')
+          handleLogout()
         } else {
           showMessage(`Failed to load admin dashboard: ${error.message}`, 'error')
         }
@@ -329,32 +305,130 @@ function Admin() {
         </div>
       )}
 
-      {/* Debug Info - Show admin status */}
-      {currentUserId && (
-        <div className={styles.section} style={{ marginBottom: '2rem' }}>
-          <div style={{ background: 'rgba(255,255,255,0.1)', padding: '1rem', borderRadius: '8px', fontSize: '0.9rem' }}>
-            <p><strong>Debug Info:</strong></p>
-            <p>Your User ID: <code>{currentUserId}</code></p>
-            <p>Admin Status: <strong>{isAdmin ? '✅ Admin' : '❌ Not Admin'}</strong></p>
-            <p>Loading: {loading ? 'Yes' : 'No'}</p>
-            <button 
+
+      {/* Self-Service: Set Your Credits */}
+      <div className={styles.section}>
+        <h2 className={styles.sectionTitle}>
+          <FaCoins /> Set Your Credits
+        </h2>
+        <div className={styles.card}>
+          <p style={{ marginBottom: '1rem', opacity: 0.9 }}>
+            Choose your credit tier or set unlimited admin access:
+          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+            <button
               onClick={async () => {
                 try {
-                  const status = await checkAdmin()
-                  setIsAdmin(status)
-                  showMessage(`Admin check: ${status ? 'You are an admin' : 'You are NOT an admin'}`, status ? 'success' : 'error')
+                  setLoading(true)
+                  const token = getCreditToken()
+                  const result = await setMyCredits(5, token)
+                  if (result.token) {
+                    localStorage.setItem('creditToken', result.token)
+                    showMessage('Set to 5 credits successfully', 'success')
+                    setTimeout(() => window.location.reload(), 1000)
+                  }
                 } catch (error) {
-                  showMessage(`Admin check failed: ${error.message}`, 'error')
+                  showMessage('Failed to set credits: ' + (error.response?.data?.message || error.message), 'error')
+                } finally {
+                  setLoading(false)
                 }
               }}
               className={styles.btnPrimary}
-              style={{ marginTop: '0.5rem' }}
+              disabled={loading}
             >
-              Re-check Admin Status
+              <FaCoins /> Set to 5 Credits
+            </button>
+            <button
+              onClick={async () => {
+                try {
+                  setLoading(true)
+                  const token = getCreditToken()
+                  const result = await setMyCredits(20, token)
+                  if (result.token) {
+                    localStorage.setItem('creditToken', result.token)
+                    showMessage('Set to 20 credits successfully', 'success')
+                    setTimeout(() => window.location.reload(), 1000)
+                  }
+                } catch (error) {
+                  showMessage('Failed to set credits: ' + (error.response?.data?.message || error.message), 'error')
+                } finally {
+                  setLoading(false)
+                }
+              }}
+              className={styles.btnPrimary}
+              disabled={loading}
+            >
+              <FaCoins /> Set to 20 Credits
+            </button>
+            <button
+              onClick={async () => {
+                try {
+                  setLoading(true)
+                  const token = getCreditToken()
+                  const result = await setMyCredits(50, token)
+                  if (result.token) {
+                    localStorage.setItem('creditToken', result.token)
+                    showMessage('Set to 50 credits successfully', 'success')
+                    setTimeout(() => window.location.reload(), 1000)
+                  }
+                } catch (error) {
+                  showMessage('Failed to set credits: ' + (error.response?.data?.message || error.message), 'error')
+                } finally {
+                  setLoading(false)
+                }
+              }}
+              className={styles.btnPrimary}
+              disabled={loading}
+            >
+              <FaCoins /> Set to 50 Credits
+            </button>
+            <button
+              onClick={async () => {
+                try {
+                  setLoading(true)
+                  const token = getCreditToken()
+                  const result = await setMyCredits(120, token)
+                  if (result.token) {
+                    localStorage.setItem('creditToken', result.token)
+                    showMessage('Set to 120 credits successfully', 'success')
+                    setTimeout(() => window.location.reload(), 1000)
+                  }
+                } catch (error) {
+                  showMessage('Failed to set credits: ' + (error.response?.data?.message || error.message), 'error')
+                } finally {
+                  setLoading(false)
+                }
+              }}
+              className={styles.btnPrimary}
+              disabled={loading}
+            >
+              <FaCoins /> Set to 120 Credits
+            </button>
+            <button
+              onClick={async () => {
+                try {
+                  setLoading(true)
+                  const result = await createOverrideToken(currentUserId, null, 0, 31536000) // 1 year expiry
+                  if (result.token) {
+                    localStorage.setItem('creditToken', result.token)
+                    showMessage('Set to Admin (Unlimited) successfully', 'success')
+                    window.location.reload()
+                  }
+                } catch (error) {
+                  showMessage('Failed to set admin: ' + (error.response?.data?.message || error.message), 'error')
+                } finally {
+                  setLoading(false)
+                }
+              }}
+              className={styles.btnPrimary}
+              style={{ background: '#667eea', marginTop: '0.5rem' }}
+              disabled={loading}
+            >
+              <FaUserShield /> Set to Admin (Unlimited)
             </button>
           </div>
         </div>
-      )}
+      </div>
 
       {/* Quick Actions */}
       <div className={styles.section}>
@@ -363,39 +437,6 @@ function Admin() {
         </h2>
         
         <div className={styles.quickActions}>
-          {/* Current User Status */}
-          <div className={styles.card}>
-            <h3>Your Current Status</h3>
-            <div className={styles.userInfo}>
-              <p><strong>User ID:</strong></p>
-              <code className={styles.userId}>{currentUserId}</code>
-              <p className={styles.statusBadge}>
-                {isCurrentUserPremium ? (
-                  <span className={styles.premium}>
-                    <FaCrown /> Premium
-                  </span>
-                ) : (
-                  <span className={styles.free}>Free User</span>
-                )}
-              </p>
-            </div>
-            
-            <button 
-              onClick={handleToggleMyStatus}
-              className={`${styles.toggleBtn} ${isCurrentUserPremium ? styles.btnDanger : styles.btnSuccess}`}
-              disabled={loading}
-            >
-              {isCurrentUserPremium ? (
-                <>
-                  <FaToggleOff /> Switch to Free (Test Limits)
-                </>
-              ) : (
-                <>
-                  <FaToggleOn /> Switch to Premium (Test Features)
-                </>
-              )}
-            </button>
-          </div>
 
           {/* Refresh Button */}
           <div className={styles.card}>

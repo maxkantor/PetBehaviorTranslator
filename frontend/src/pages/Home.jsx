@@ -537,12 +537,6 @@ function Home() {
               <FaHeadset />
               Contact Support
             </Link>
-            {isAdmin && (
-              <Link to="/admin" className={styles.adminLink}>
-                <FaUserShield />
-                Admin Dashboard
-              </Link>
-            )}
           </div>
 
           <div className={styles.copyright}>
