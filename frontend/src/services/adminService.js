@@ -132,30 +132,6 @@ export const grantCredits = async (userId, credits, existingToken = null) => {
   }
 }
 
-// Reset user activities - ADMIN ONLY
-export const resetUserActivities = async (targetUserId) => {
-  try {
-    const adminUserId = getUserId()
-    const response = await axios.post(`${API_URL}/api/admin/reset-user/${targetUserId}?adminUserId=${adminUserId}`)
-    return response.data
-  } catch (error) {
-    console.error('Error resetting user activities:', error)
-    throw error
-  }
-}
-
-// Reset all activities - ADMIN ONLY
-export const resetAllActivities = async () => {
-  try {
-    const adminUserId = getUserId()
-    const response = await axios.post(`${API_URL}/api/admin/reset-all?adminUserId=${adminUserId}`)
-    return response.data
-  } catch (error) {
-    console.error('Error resetting all activities:', error)
-    throw error
-  }
-}
-
 // ============================================================================
 // NEW ADMIN ENDPOINTS - Enhanced Admin System
 // ============================================================================
