@@ -1,28 +1,20 @@
 import { useState, useEffect } from 'react'
 import { Navigate } from 'react-router-dom'
-import { checkAdmin } from '../services/adminService'
+import { checkAdminSession } from '../services/adminService'
 import { FaUserShield } from 'react-icons/fa'
 
 function ProtectedAdminRoute({ children }) {
-  const [isAdmin, setIsAdmin] = useState(null) // null = checking, true = admin, false = not admin
+  const [isAuthenticated, setIsAuthenticated] = useState(null) // null = checking, true = authenticated, false = not authenticated
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const verifyAdmin = async () => {
-      try {
-        const adminStatus = await checkAdmin()
-        setIsAdmin(adminStatus)
-      } catch (error) {
-        console.error('Error checking admin status:', error)
-        setIsAdmin(false)
-      } finally {
-        setLoading(false)
-      }
-    }
-    verifyAdmin()
+    // Check if user has valid admin session
+    const hasSession = checkAdminSession()
+    setIsAuthenticated(hasSession)
+    setLoading(false)
   }, [])
 
-  if (loading || isAdmin === null) {
+  if (loading || isAuthenticated === null) {
     return (
       <div style={{
         minHeight: '100vh',
@@ -40,8 +32,9 @@ function ProtectedAdminRoute({ children }) {
     )
   }
 
-  if (!isAdmin) {
-    return <Navigate to="/" replace />
+  if (!isAuthenticated) {
+    // Redirect to login page
+    return <Navigate to="/admin/login" replace />
   }
 
   return children

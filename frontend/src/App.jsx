@@ -3,6 +3,7 @@ import Home from './pages/Home'
 import Premium from './pages/Premium'
 import Support from './pages/Support'
 import Admin from './pages/Admin'
+import AdminLogin from './pages/AdminLogin'
 import PaymentSuccess from './pages/PaymentSuccess'
 import MockCheckout from './pages/MockCheckout'
 import Credits from './pages/Credits'
@@ -15,6 +16,7 @@ function App() {
       <Route path="/" element={<Home />} />
       <Route path="/premium" element={<Premium />} />
       <Route path="/support" element={<Support />} />
+      <Route path="/admin/login" element={<AdminLogin />} />
       <Route path="/admin" element={
         <ProtectedAdminRoute>
           <Admin />

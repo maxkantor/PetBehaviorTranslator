@@ -136,6 +136,49 @@ export const grantCredits = async (userId, credits, existingToken = null) => {
 // NEW ADMIN ENDPOINTS - Enhanced Admin System
 // ============================================================================
 
+// POST /admin/login - Login with username/password
+export const adminLogin = async (username, password) => {
+  try {
+    const response = await axios.post(`${API_URL}/api/admin/login`, {
+      username,
+      password
+    })
+    return response.data
+  } catch (error) {
+    console.error('Error logging in:', error)
+    throw error
+  }
+}
+
+// Check if admin session is valid
+export const checkAdminSession = () => {
+  const sessionToken = localStorage.getItem('adminSessionToken')
+  const expiresAt = localStorage.getItem('adminSessionExpiresAt')
+  
+  if (!sessionToken || !expiresAt) {
+    return false
+  }
+  
+  // Check if session expired
+  const now = Math.floor(Date.now() / 1000)
+  const expiry = parseInt(expiresAt, 10)
+  
+  if (now >= expiry) {
+    // Session expired, clear it
+    localStorage.removeItem('adminSessionToken')
+    localStorage.removeItem('adminSessionExpiresAt')
+    return false
+  }
+  
+  return true
+}
+
+// Logout admin (clear session)
+export const adminLogout = () => {
+  localStorage.removeItem('adminSessionToken')
+  localStorage.removeItem('adminSessionExpiresAt')
+}
+
 // POST /admin/connect - Connect as admin and get admin token
 export const adminConnect = async () => {
   try {

@@ -1,13 +1,14 @@
 import { useState, useEffect } from 'react'
-import { Link } from 'react-router-dom'
-import { FaPaw, FaUserShield, FaCrown, FaUsers, FaToggleOn, FaToggleOff, FaSync, FaCoins, FaGift, FaHistory, FaRedo, FaTrash, FaChartBar, FaCog, FaKey, FaEnvelope } from 'react-icons/fa'
+import { Link, useNavigate } from 'react-router-dom'
+import { FaPaw, FaUserShield, FaCrown, FaUsers, FaToggleOn, FaToggleOff, FaSync, FaCoins, FaGift, FaHistory, FaRedo, FaTrash, FaChartBar, FaCog, FaKey, FaEnvelope, FaSignOutAlt } from 'react-icons/fa'
 import { getUserId } from '../services/premiumService'
-import { checkAdmin, getAllUsers, setPremiumStatus, setPremiumPlan, removePremiumStatus, grantCredits, getActivities, resetUserActivities, resetAllActivities, adminConnect, getAdminDashboard, updateAdminConfig, createOverrideToken } from '../services/adminService'
+import { checkAdmin, getAllUsers, setPremiumStatus, setPremiumPlan, removePremiumStatus, grantCredits, getActivities, resetUserActivities, resetAllActivities, adminConnect, getAdminDashboard, updateAdminConfig, createOverrideToken, adminLogout } from '../services/adminService'
 import { getCreditToken } from '../services/creditService'
 import axios from 'axios'
 import styles from './Admin.module.css'
 
 function Admin() {
+  const navigate = useNavigate()
   const [currentUserId, setCurrentUserId] = useState('')
   const [users, setUsers] = useState([])
   const [loading, setLoading] = useState(false)
@@ -24,6 +25,11 @@ function Admin() {
   const [showOverrideToken, setShowOverrideToken] = useState(false)
   const [configData, setConfigData] = useState({ freeSearchLimit: 5, tiers: [], adminEmails: [] })
   const [overrideForm, setOverrideForm] = useState({ targetUserId: '', targetEmail: '', credits: 0, expirySeconds: 86400 })
+
+  const handleLogout = () => {
+    adminLogout()
+    navigate('/admin/login', { replace: true })
+  }
 
   useEffect(() => {
     const initializeAdmin = async () => {
@@ -307,6 +313,13 @@ function Admin() {
         <p className={styles.subtitle}>
           Manage users, credentials, and test premium features
         </p>
+        <button
+          onClick={handleLogout}
+          className={styles.btnPrimary}
+          style={{ marginTop: '1rem', background: '#dc3545' }}
+        >
+          <FaSignOutAlt /> Logout
+        </button>
       </div>
 
       {/* Message Alert */}
@@ -471,40 +484,171 @@ function Admin() {
           </button>
           {showConfigEditor && (
             <div style={{ marginTop: '1rem' }}>
-              <div style={{ marginBottom: '1rem' }}>
+              <div style={{ marginBottom: '1.5rem', padding: '1rem', background: 'rgba(255,255,255,0.05)', borderRadius: '8px' }}>
+                <h3 style={{ marginBottom: '0.5rem', fontSize: '1.1rem' }}>Free Search Limit</h3>
+                <p style={{ fontSize: '0.9rem', opacity: 0.8, marginBottom: '0.5rem' }}>
+                  Number of free searches every user gets before needing to purchase credits
+                </p>
                 <label>Free Search Limit:</label>
                 <input
                   type="number"
                   min="0"
                   value={configData.freeSearchLimit}
                   onChange={(e) => setConfigData({ ...configData, freeSearchLimit: parseInt(e.target.value) || 5 })}
-                  style={{ marginLeft: '0.5rem', padding: '0.5rem', borderRadius: '4px', border: '1px solid #ccc' }}
+                  style={{ marginLeft: '0.5rem', padding: '0.5rem', borderRadius: '4px', border: '1px solid #ccc', width: '100px' }}
                 />
               </div>
-              <div style={{ marginBottom: '1rem' }}>
-                <label>Admin Emails (comma-separated):</label>
+
+              <div style={{ marginBottom: '1.5rem', padding: '1rem', background: 'rgba(255,255,255,0.05)', borderRadius: '8px' }}>
+                <h3 style={{ marginBottom: '0.5rem', fontSize: '1.1rem' }}>Credit Packs (Tiers)</h3>
+                <p style={{ fontSize: '0.9rem', opacity: 0.8, marginBottom: '1rem' }}>
+                  Configure the credit packs available for purchase. Users will see these on the Credits page.
+                </p>
+                <div style={{ marginBottom: '1rem' }}>
+                  {configData.tiers && configData.tiers.length > 0 ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                      {configData.tiers.map((tier, index) => (
+                        <div key={index} style={{ padding: '0.75rem', background: 'rgba(255,255,255,0.1)', borderRadius: '6px', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                            <input
+                              type="text"
+                              placeholder="Pack Name (e.g., Starter Pack)"
+                              value={tier.name || ''}
+                              onChange={(e) => {
+                                const newTiers = [...configData.tiers]
+                                newTiers[index] = { ...newTiers[index], name: e.target.value }
+                                setConfigData({ ...configData, tiers: newTiers })
+                              }}
+                              style={{ padding: '0.4rem', borderRadius: '4px', border: '1px solid #ccc', flex: '1', minWidth: '150px' }}
+                            />
+                            <input
+                              type="text"
+                              placeholder="Description"
+                              value={tier.description || ''}
+                              onChange={(e) => {
+                                const newTiers = [...configData.tiers]
+                                newTiers[index] = { ...newTiers[index], description: e.target.value }
+                                setConfigData({ ...configData, tiers: newTiers })
+                              }}
+                              style={{ padding: '0.4rem', borderRadius: '4px', border: '1px solid #ccc', flex: '1', minWidth: '200px' }}
+                            />
+                            <input
+                              type="number"
+                              placeholder="Price ($)"
+                              min="0"
+                              step="0.01"
+                              value={tier.price || ''}
+                              onChange={(e) => {
+                                const newTiers = [...configData.tiers]
+                                newTiers[index] = { ...newTiers[index], price: parseFloat(e.target.value) || 0 }
+                                setConfigData({ ...configData, tiers: newTiers })
+                              }}
+                              style={{ padding: '0.4rem', borderRadius: '4px', border: '1px solid #ccc', width: '100px' }}
+                            />
+                            <input
+                              type="number"
+                              placeholder="Credits"
+                              min="1"
+                              value={tier.credits || ''}
+                              onChange={(e) => {
+                                const newTiers = [...configData.tiers]
+                                newTiers[index] = { ...newTiers[index], credits: parseInt(e.target.value) || 0 }
+                                setConfigData({ ...configData, tiers: newTiers })
+                              }}
+                              style={{ padding: '0.4rem', borderRadius: '4px', border: '1px solid #ccc', width: '100px' }}
+                            />
+                            <label style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', cursor: 'pointer' }}>
+                              <input
+                                type="checkbox"
+                                checked={tier.popular || false}
+                                onChange={(e) => {
+                                  const newTiers = [...configData.tiers]
+                                  newTiers[index] = { ...newTiers[index], popular: e.target.checked }
+                                  setConfigData({ ...configData, tiers: newTiers })
+                                }}
+                              />
+                              Popular
+                            </label>
+                            <button
+                              onClick={() => {
+                                const newTiers = configData.tiers.filter((_, i) => i !== index)
+                                setConfigData({ ...configData, tiers: newTiers })
+                              }}
+                              style={{ padding: '0.4rem 0.8rem', background: '#dc3545', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                            >
+                              Remove
+                            </button>
+                          </div>
+                          {tier.price && tier.credits && (
+                            <div style={{ fontSize: '0.85rem', opacity: 0.8 }}>
+                              ${(tier.price / tier.credits).toFixed(3)} per credit
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p style={{ opacity: 0.7, fontStyle: 'italic' }}>No credit packs configured. Add one below.</p>
+                  )}
+                  <button
+                    onClick={() => {
+                      const newTier = {
+                        id: configData.tiers.length > 0 ? Math.max(...configData.tiers.map(t => t.id || 0)) + 1 : 1,
+                        name: '',
+                        description: '',
+                        price: 0,
+                        credits: 0,
+                        popular: false
+                      }
+                      setConfigData({ ...configData, tiers: [...configData.tiers, newTier] })
+                    }}
+                    style={{ marginTop: '0.5rem', padding: '0.5rem 1rem', background: '#28a745', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                  >
+                    + Add Credit Pack
+                  </button>
+                </div>
+              </div>
+
+              <div style={{ marginBottom: '1.5rem', padding: '1rem', background: 'rgba(255,255,255,0.05)', borderRadius: '8px' }}>
+                <h3 style={{ marginBottom: '0.5rem', fontSize: '1.1rem' }}>Admin Emails</h3>
+                <p style={{ fontSize: '0.9rem', opacity: 0.8, marginBottom: '0.5rem' }}>
+                  Email addresses that have admin access (comma-separated)
+                </p>
+                <label>Admin Emails:</label>
                 <input
                   type="text"
                   value={configData.adminEmails.join(', ')}
                   onChange={(e) => setConfigData({ ...configData, adminEmails: e.target.value.split(',').map(e => e.trim()).filter(e => e) })}
                   placeholder="admin@example.com, admin2@example.com"
-                  style={{ marginLeft: '0.5rem', padding: '0.5rem', borderRadius: '4px', border: '1px solid #ccc', width: '300px' }}
+                  style={{ marginLeft: '0.5rem', padding: '0.5rem', borderRadius: '4px', border: '1px solid #ccc', width: '400px' }}
                 />
               </div>
+
               <button
                 onClick={async () => {
                   try {
+                    // Validate tiers before saving
+                    const validTiers = configData.tiers.filter(t => 
+                      t.name && t.description && t.price > 0 && t.credits > 0
+                    )
+                    if (configData.tiers.length > 0 && validTiers.length !== configData.tiers.length) {
+                      showMessage('Please fill in all fields for credit packs (name, description, price > 0, credits > 0)', 'error')
+                      return
+                    }
+                    
                     await updateAdminConfig({
                       freeSearchLimit: configData.freeSearchLimit,
+                      tiers: validTiers.length > 0 ? validTiers : null,
                       adminEmails: configData.adminEmails
                     })
                     showMessage('Configuration updated successfully', 'success')
                     await loadDashboard()
                   } catch (error) {
-                    showMessage('Failed to update configuration', 'error')
+                    showMessage('Failed to update configuration: ' + (error.response?.data?.message || error.message), 'error')
                   }
                 }}
                 className={styles.btnPrimary}
+                style={{ padding: '0.75rem 1.5rem', fontSize: '1rem' }}
               >
                 Save Configuration
               </button>
