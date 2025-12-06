@@ -573,6 +573,135 @@ app.MapPost("/api/admin/grant-credits/{userId}", (string userId, GrantCreditsReq
 // NEW ADMIN ENDPOINTS - Enhanced Admin System
 // ============================================================================
 
+// POST /admin/login - Admin login with username/password
+app.MapPost("/api/admin/login", async (AdminLoginRequest request) =>
+{
+    if (string.IsNullOrWhiteSpace(request.Username) || string.IsNullOrWhiteSpace(request.Password))
+    {
+        return Results.BadRequest(new { message = "Username and password are required" });
+    }
+
+    // Get admin credentials (try Secrets Manager first, then SSM, then env vars)
+    string adminUsername;
+    string adminPassword;
+    
+    // Try AWS Secrets Manager first (most secure)
+    try
+    {
+        using var secretsClient = new Amazon.SecretsManager.AmazonSecretsManagerClient();
+        var secretRequest = new Amazon.SecretsManager.Model.GetSecretValueRequest
+        {
+            SecretId = "/pettranslator/admin-credentials"
+        };
+        var secretResponse = await secretsClient.GetSecretValueAsync(secretRequest);
+        
+        // Parse JSON secret
+        var secretJson = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string>>(secretResponse.SecretString);
+        if (secretJson != null && secretJson.ContainsKey("username") && secretJson.ContainsKey("password"))
+        {
+            adminUsername = secretJson["username"];
+            adminPassword = secretJson["password"];
+            Console.WriteLine("[ADMIN LOGIN] Using AWS Secrets Manager");
+        }
+        else
+        {
+            throw new Exception("Secret does not contain username/password");
+        }
+    }
+    catch (Exception secretsEx)
+    {
+        Console.WriteLine($"[ADMIN LOGIN] Secrets Manager not available: {secretsEx.Message}");
+        
+        // Fallback to SSM Parameter Store
+        try
+        {
+            using var ssmClient = new Amazon.SimpleSystemsManagement.AmazonSimpleSystemsManagementClient();
+            
+            // Get username
+            try
+            {
+                var usernameRequest = new Amazon.SimpleSystemsManagement.Model.GetParameterRequest
+                {
+                    Name = "/pettranslator/admin-username",
+                    WithDecryption = false
+                };
+                var usernameResponse = await ssmClient.GetParameterAsync(usernameRequest);
+                adminUsername = usernameResponse.Parameter.Value;
+            }
+            catch
+            {
+                adminUsername = Environment.GetEnvironmentVariable("ADMIN_USERNAME") ?? "mkantor";
+            }
+            
+            // Get password
+            try
+            {
+                var passwordRequest = new Amazon.SimpleSystemsManagement.Model.GetParameterRequest
+                {
+                    Name = "/pettranslator/admin-password",
+                    WithDecryption = true
+                };
+                var passwordResponse = await ssmClient.GetParameterAsync(passwordRequest);
+                adminPassword = passwordResponse.Parameter.Value;
+            }
+            catch
+            {
+                adminPassword = Environment.GetEnvironmentVariable("ADMIN_PASSWORD") ?? "Maxang11@@##";
+            }
+            
+            Console.WriteLine("[ADMIN LOGIN] Using SSM Parameter Store");
+        }
+        catch (Exception ssmEx)
+        {
+            // Final fallback to environment variables
+            adminUsername = Environment.GetEnvironmentVariable("ADMIN_USERNAME") ?? "mkantor";
+            adminPassword = Environment.GetEnvironmentVariable("ADMIN_PASSWORD") ?? "Maxang11@@##";
+            Console.WriteLine($"[ADMIN LOGIN] Using environment variables fallback: {ssmEx.Message}");
+        }
+    }
+
+    // Verify credentials
+    if (request.Username != adminUsername || request.Password != adminPassword)
+    {
+        // Log failed attempt (without credentials)
+        Console.WriteLine($"[ADMIN LOGIN] Failed login attempt for username: {request.Username}");
+        return Results.Json(new { message = "Invalid username or password" }, statusCode: 401);
+    }
+
+    // Create a session token (simple signed token with expiry)
+    var sessionPayload = new TokenPayload
+    {
+        UserId = $"admin_session_{DateTimeOffset.UtcNow.ToUnixTimeSeconds()}",
+        FreeSearchesUsed = 0,
+        CreditsRemaining = 0,
+        IsAdmin = true,
+        IsAdminOverride = false,
+        IssuedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
+        ExpiresAt = DateTimeOffset.UtcNow.AddHours(24).ToUnixTimeSeconds() // 24 hour session
+    };
+    
+    var sessionToken = tokenService.CreateToken(
+        sessionPayload.UserId,
+        freeSearchesUsed: 0,
+        creditsRemaining: 0,
+        isAdmin: true,
+        isAdminOverride: false,
+        customExpiresAt: sessionPayload.ExpiresAt
+    );
+
+    Console.WriteLine($"[ADMIN LOGIN] Successful login for username: {request.Username}");
+
+    return Results.Ok(new
+    {
+        success = true,
+        sessionToken = sessionToken,
+        expiresAt = sessionPayload.ExpiresAt,
+        message = "Login successful"
+    });
+})
+.WithName("AdminLogin")
+.WithOpenApi();
+
 // POST /admin/connect - Admin connect endpoint
 app.MapPost("/api/admin/connect", async (AdminConnectRequest request) =>
 {
@@ -1757,6 +1886,8 @@ public record GrantCreditsRequest(int Credits, string? ExistingToken = null);
 
 // New Admin request models
 public record AdminConnectRequest(string UserId, string? Email = null);
+
+public record AdminLoginRequest(string Username, string Password);
 
 public record AdminConfigUpdateRequest(int? FreeSearchLimit = null, List<CreditTier>? Tiers = null, List<string>? AdminEmails = null);
 
