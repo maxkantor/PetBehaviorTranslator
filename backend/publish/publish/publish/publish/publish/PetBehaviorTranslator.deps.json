@@ -8,6 +8,7 @@
     ".NETCoreApp,Version=v8.0": {
       "PetBehaviorTranslator/1.0.0": {
         "dependencies": {
+          "AWSSDK.S3": "3.7.400",
           "AWSSDK.SimpleSystemsManagement": "3.7.401",
           "Amazon.Lambda.AspNetCoreServer.Hosting": "1.7.0",
           "Amazon.Lambda.Core": "2.2.0",
@@ -114,6 +115,17 @@
           "lib/net8.0/AWSSDK.Core.dll": {
             "assemblyVersion": "3.3.0.0",
             "fileVersion": "3.7.400.2"
+          }
+        }
+      },
+      "AWSSDK.S3/3.7.400": {
+        "dependencies": {
+          "AWSSDK.Core": "3.7.400.2"
+        },
+        "runtime": {
+          "lib/net8.0/AWSSDK.S3.dll": {
+            "assemblyVersion": "3.3.0.0",
+            "fileVersion": "3.7.400.0"
           }
         }
       },
@@ -335,6 +347,13 @@
       "sha512": "sha512-Hq2GvaU4GMNJOrZfq5K5to9pXgmUvgKs2ITbLmVCs1/DtFThv8hQUmnzzONbxb0n3b7mj7Ztlp0gF6PuuSq+5A==",
       "path": "awssdk.core/3.7.400.2",
       "hashPath": "awssdk.core.3.7.400.2.nupkg.sha512"
+    },
+    "AWSSDK.S3/3.7.400": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-OWCTOIDLd9tisJBigWlws3zXXU8IPc6MGracx0zojB4z0ki7ruL77ZWbj5j9j3zSVvnnLe4uOL/4w2lco/9kBw==",
+      "path": "awssdk.s3/3.7.400",
+      "hashPath": "awssdk.s3.3.7.400.nupkg.sha512"
     },
     "AWSSDK.SimpleSystemsManagement/3.7.401": {
       "type": "package",
