@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { FaPaw, FaUserShield, FaCrown, FaUsers, FaToggleOn, FaToggleOff, FaSync, FaCoins, FaGift, FaHistory, FaRedo, FaTrash, FaChartBar, FaCog, FaKey, FaEnvelope, FaSignOutAlt } from 'react-icons/fa'
 import { getUserId } from '../services/premiumService'
-import { checkAdmin, getAllUsers, setPremiumStatus, setPremiumPlan, removePremiumStatus, grantCredits, getActivities, resetUserActivities, resetAllActivities, adminConnect, getAdminDashboard, updateAdminConfig, createOverrideToken, adminLogout, setMyCredits } from '../services/adminService'
+import { checkAdmin, getAllUsers, setPremiumStatus, setPremiumPlan, removePremiumStatus, grantCredits, getActivities, resetUserActivities, resetAllActivities, adminConnect, getAdminDashboard, updateAdminConfig, createOverrideToken, adminLogout, setMyCredits, setUserCredits } from '../services/adminService'
 import { getCreditToken } from '../services/creditService'
 import axios from 'axios'
 import styles from './Admin.module.css'
@@ -17,6 +17,8 @@ function Admin() {
   const [selectedPlan, setSelectedPlan] = useState('lifetime')
   const [creditsToGrant, setCreditsToGrant] = useState(100)
   const [grantingCredits, setGrantingCredits] = useState(null)
+  const [userCustomCredits, setUserCustomCredits] = useState({}) // userId -> credit amount
+  const [settingCredits, setSettingCredits] = useState(null) // userId being set
   const [activities, setActivities] = useState([])
   const [showActivities, setShowActivities] = useState(false)
   const [isAdmin, setIsAdmin] = useState(false)
@@ -164,6 +166,7 @@ function Admin() {
       if (userId === currentUserId && result.token) {
         localStorage.setItem('creditToken', result.token)
       }
+      await loadUsers() // Refresh user list
     } catch (error) {
       if (error.response?.status === 401) {
         showMessage('Access denied. Admin access required.', 'error')
@@ -172,6 +175,31 @@ function Admin() {
       }
     } finally {
       setGrantingCredits(null)
+    }
+  }
+
+  const handleSetUserCredits = async (userId) => {
+    const credits = userCustomCredits[userId] ?? 0
+    if (credits < 0) {
+      showMessage('Credits cannot be negative', 'error')
+      return
+    }
+    setSettingCredits(userId)
+    try {
+      const token = getCreditToken()
+      const result = await setUserCredits(userId, credits, token)
+      showMessage(`Set ${userId} credits to ${credits}`, 'success')
+      // Clear the input
+      setUserCustomCredits({ ...userCustomCredits, [userId]: '' })
+      await loadUsers() // Refresh user list
+    } catch (error) {
+      if (error.response?.status === 401) {
+        showMessage('Access denied. Admin access required.', 'error')
+      } else {
+        showMessage('Failed to set credits: ' + (error.response?.data?.message || error.message), 'error')
+      }
+    } finally {
+      setSettingCredits(null)
     }
   }
 
@@ -316,6 +344,28 @@ function Admin() {
             Choose your credit tier or set unlimited admin access:
           </p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+            <button
+              onClick={async () => {
+                try {
+                  setLoading(true)
+                  const token = getCreditToken()
+                  const result = await setMyCredits(0, token)
+                  if (result.token) {
+                    localStorage.setItem('creditToken', result.token)
+                    showMessage('Set to 0 credits successfully', 'success')
+                    setTimeout(() => window.location.reload(), 1000)
+                  }
+                } catch (error) {
+                  showMessage('Failed to set credits: ' + (error.response?.data?.message || error.message), 'error')
+                } finally {
+                  setLoading(false)
+                }
+              }}
+              className={styles.btnPrimary}
+              disabled={loading}
+            >
+              <FaCoins /> Set to 0 Credits
+            </button>
             <button
               onClick={async () => {
                 try {
@@ -633,6 +683,7 @@ function Admin() {
                   )}
                   <button
                     onClick={() => {
+                      // Always allow adding new packs, even if there are incomplete ones
                       const newTier = {
                         id: configData.tiers.length > 0 ? Math.max(...configData.tiers.map(t => t.id || 0)) + 1 : 1,
                         name: '',
@@ -647,6 +698,11 @@ function Admin() {
                   >
                     + Add Credit Pack
                   </button>
+                  {configData.tiers.some(t => !t.name || !t.description || t.price <= 0 || t.credits <= 0) && (
+                    <p style={{ marginTop: '0.5rem', fontSize: '0.85rem', opacity: '0.8', fontStyle: 'italic' }}>
+                      Note: Incomplete packs (with empty fields) will be removed when you save. You can add new packs anytime.
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -668,12 +724,21 @@ function Admin() {
               <button
                 onClick={async () => {
                   try {
-                    // Validate tiers before saving
+                    // Validate tiers before saving - filter out incomplete ones
                     const validTiers = configData.tiers.filter(t => 
                       t.name && t.description && t.price > 0 && t.credits > 0
                     )
-                    if (configData.tiers.length > 0 && validTiers.length !== configData.tiers.length) {
-                      showMessage('Please fill in all fields for credit packs (name, description, price > 0, credits > 0)', 'error')
+                    const incompleteTiers = configData.tiers.filter(t => 
+                      !t.name || !t.description || t.price <= 0 || t.credits <= 0
+                    )
+                    
+                    // Warn if there are incomplete tiers, but still allow saving valid ones
+                    if (incompleteTiers.length > 0 && validTiers.length > 0) {
+                      if (!window.confirm(`${incompleteTiers.length} incomplete credit pack(s) will be removed. Continue?`)) {
+                        return
+                      }
+                    } else if (incompleteTiers.length > 0 && validTiers.length === 0) {
+                      showMessage('Please fill in all fields for at least one credit pack (name, description, price > 0, credits > 0)', 'error')
                       return
                     }
                     
@@ -919,7 +984,7 @@ function Admin() {
                 
                 {/* Grant Credits Section */}
                 <div className={styles.creditsSection}>
-                  <label>Grant Credits:</label>
+                  <label>Grant Credits (Add):</label>
                   <div className={styles.creditsInput}>
                     <input
                       type="number"
@@ -940,6 +1005,37 @@ function Admin() {
                       ) : (
                         <>
                           <FaCoins /> Grant Credits
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Set Custom Credits Section */}
+                <div className={styles.creditsSection} style={{ marginTop: '0.5rem' }}>
+                  <label>Set Credits (Exact Amount):</label>
+                  <div className={styles.creditsInput}>
+                    <input
+                      type="number"
+                      min="0"
+                      placeholder="Enter amount"
+                      value={userCustomCredits[user.userId] ?? ''}
+                      onChange={(e) => setUserCustomCredits({ ...userCustomCredits, [user.userId]: e.target.value === '' ? '' : parseInt(e.target.value) || 0 })}
+                      className={styles.creditsInputField}
+                    />
+                    <button 
+                      onClick={() => handleSetUserCredits(user.userId)}
+                      className={styles.btnCredits}
+                      disabled={loading || settingCredits === user.userId}
+                      style={{ background: '#667eea' }}
+                    >
+                      {settingCredits === user.userId ? (
+                        <>
+                          <FaSync className={styles.spinning} /> Setting...
+                        </>
+                      ) : (
+                        <>
+                          <FaCoins /> Set Credits
                         </>
                       )}
                     </button>
