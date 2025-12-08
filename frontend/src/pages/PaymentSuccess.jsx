@@ -22,6 +22,10 @@ function PaymentSuccess() {
       const isCredit = location.pathname.includes('/credits/success')
       setIsCreditPurchase(isCredit)
 
+      // Check if this is a Stripe checkout (has session_id)
+      const sessionId = searchParams.get('session_id')
+      const isStripe = !!sessionId
+
       if (isCredit) {
         // Handle credit purchase
         const tierId = parseInt(searchParams.get('tierId'))
@@ -34,15 +38,20 @@ function PaymentSuccess() {
         }
 
         try {
-          const response = await completeCreditPurchase(tierId, token)
+          // If Stripe session, pass sessionId; otherwise use regular flow
+          const requestData = isStripe 
+            ? { tierId, existingToken: token, sessionId }
+            : { tierId, existingToken: token }
+          
+          const response = await axios.post(`${API_URL}/api/credits/complete-purchase`, requestData)
 
-          if (response.success) {
+          if (response.data.success) {
             setSuccess(true)
-            setMessage(response.message)
+            setMessage(response.data.message)
             setPlanDetails({
-              tierId: response.tierName,
-              creditsAdded: response.creditsAdded,
-              creditsRemaining: response.creditsRemaining
+              tierId: response.data.tierName,
+              creditsAdded: response.data.creditsAdded,
+              creditsRemaining: response.data.creditsRemaining
             })
           }
         } catch (error) {
@@ -63,10 +72,12 @@ function PaymentSuccess() {
         }
 
         try {
-          const response = await axios.post(`${API_URL}/api/payment/complete`, {
-            userId,
-            planId
-          })
+          // If Stripe session, pass sessionId; otherwise use regular flow
+          const requestData = isStripe
+            ? { userId, planId, sessionId }
+            : { userId, planId }
+          
+          const response = await axios.post(`${API_URL}/api/payment/complete`, requestData)
 
           if (response.data.success) {
             setSuccess(true)

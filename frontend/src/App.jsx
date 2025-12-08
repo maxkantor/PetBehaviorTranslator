@@ -1,4 +1,4 @@
-import { Routes, Route } from 'react-router-dom'
+import { Routes, Route, Navigate } from 'react-router-dom'
 import Home from './pages/Home'
 import Premium from './pages/Premium'
 import Support from './pages/Support'
@@ -16,6 +16,9 @@ function App() {
       <Route path="/" element={<Home />} />
       <Route path="/premium" element={<Premium />} />
       <Route path="/support" element={<Support />} />
+      {/* Redirect /login to /admin/login */}
+      <Route path="/login" element={<Navigate to="/admin/login" replace />} />
+      <Route path="/login/" element={<Navigate to="/admin/login" replace />} />
       <Route path="/admin/login" element={<AdminLogin />} />
       <Route path="/admin" element={
         <ProtectedAdminRoute>

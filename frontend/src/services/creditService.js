@@ -125,12 +125,13 @@ export const purchaseCredits = async (tierId) => {
 }
 
 // Complete credit purchase (called after payment success)
-export const completeCreditPurchase = async (tierId, existingToken) => {
+export const completeCreditPurchase = async (tierId, existingToken, sessionId = null) => {
   try {
-    const response = await axios.post(`${API_URL}/api/credits/complete-purchase`, {
-      tierId,
-      existingToken
-    })
+    const requestData = sessionId 
+      ? { tierId, existingToken, sessionId }
+      : { tierId, existingToken }
+    
+    const response = await axios.post(`${API_URL}/api/credits/complete-purchase`, requestData)
 
     // Update token in localStorage
     if (response.data.token) {
