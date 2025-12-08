@@ -29,19 +29,21 @@ function PaymentSuccess() {
       if (isCredit) {
         // Handle credit purchase
         const tierId = parseInt(searchParams.get('tierId'))
-        // Try to get token from URL first, then fall back to localStorage
-        let token = searchParams.get('token')
-        if (token) {
-          // Decode the token if it's URL encoded
-          try {
-            token = decodeURIComponent(token)
-          } catch (e) {
-            console.warn('Failed to decode token from URL, using as-is')
-          }
-        }
-        // If no token in URL or it's invalid, use token from localStorage
+        // Always prefer token from localStorage (most up-to-date)
+        // URL token might be stale or expired
+        let token = getCreditToken()
+        
+        // If no token in localStorage, try URL token as fallback
         if (!token) {
-          token = getCreditToken()
+          token = searchParams.get('token')
+          if (token) {
+            // Decode the token if it's URL encoded
+            try {
+              token = decodeURIComponent(token)
+            } catch (e) {
+              console.warn('Failed to decode token from URL, using as-is')
+            }
+          }
         }
 
         if (!tierId) {
