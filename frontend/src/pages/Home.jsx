@@ -82,10 +82,12 @@ function Home() {
     setResults(null)
 
     try {
-      // Check if user is admin or has admin override - admins bypass credit checks
-      const userIsAdmin = isAdmin || creditBalance.isAdmin || creditBalance.isAdminOverride
+      // Check if user should bypass credit checks
+      // Only bypass if has admin override OR is admin with credits > 0
+      // If admin sets credits to 0, they should consume credits like regular users
+      const shouldBypassCredits = creditBalance.isAdminOverride || (creditBalance.isAdmin && creditBalance.creditsRemaining > 0)
       
-      if (!userIsAdmin) {
+      if (!shouldBypassCredits) {
         // Check if user has credits available (non-admins only)
         const hasFreeSearches = creditBalance.freeSearchesRemaining > 0
         const hasCredits = creditBalance.creditsRemaining > 0
