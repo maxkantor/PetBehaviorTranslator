@@ -1800,6 +1800,14 @@ app.MapPost("/api/credits/complete-purchase", async (CompletePurchaseRequest req
                             if (tier != null)
                             {
                                 payload.CreditsRemaining += tier.Credits;
+                                // Ensure regular users don't get admin status after purchase
+                                // Only keep admin flags if user is actually in admin list
+                                var isUserAdmin = await IsAdminAsync(payload.UserId, null);
+                                if (!isUserAdmin)
+                                {
+                                    payload.IsAdmin = false;
+                                    payload.IsAdminOverride = false;
+                                }
                                 var newToken = tokenService.UpdateToken(payload);
                                 
                                 await eventLogService.LogEventAsync(new EventLogEntry
@@ -1859,6 +1867,14 @@ app.MapPost("/api/credits/complete-purchase", async (CompletePurchaseRequest req
 
     // Add credits to token
     payloadRegular.CreditsRemaining += tierRegular.Credits;
+    // Ensure regular users don't get admin status after purchase
+    // Only keep admin flags if user is actually in admin list
+    var isUserAdminRegular = await IsAdminAsync(payloadRegular.UserId, null);
+    if (!isUserAdminRegular)
+    {
+        payloadRegular.IsAdmin = false;
+        payloadRegular.IsAdminOverride = false;
+    }
     var newTokenRegular = tokenService.UpdateToken(payloadRegular);
 
     await eventLogService.LogEventAsync(new EventLogEntry
