@@ -59,11 +59,12 @@ function CreditBalanceIndicator() {
   }
 
   // Show admin badge if:
-  // 1. User is admin (from admin list) AND has admin override OR credits > 0
-  // 2. OR user has admin override flag set (regardless of admin list status)
-  // If credits are 0 and override is cleared, show normal balance even if in admin list
+  // 1. User has admin override flag set in token (regardless of admin list status)
+  // 2. OR user has IsAdmin flag in token AND credits > 0
+  // We check the token's admin status, not the admin list, so regular users who purchase credits don't get admin status
   const hasAdminOverride = balance.isAdminOverride || false
-  const shouldShowAdminBadge = hasAdminOverride || (isAdmin && balance.creditsRemaining > 0)
+  const hasAdminInToken = balance.isAdmin || false
+  const shouldShowAdminBadge = hasAdminOverride || (hasAdminInToken && balance.creditsRemaining > 0)
   
   if (shouldShowAdminBadge) {
     return (

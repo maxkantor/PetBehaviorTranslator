@@ -29,10 +29,29 @@ function PaymentSuccess() {
       if (isCredit) {
         // Handle credit purchase
         const tierId = parseInt(searchParams.get('tierId'))
-        const token = searchParams.get('token') || getCreditToken()
+        // Try to get token from URL first, then fall back to localStorage
+        let token = searchParams.get('token')
+        if (token) {
+          // Decode the token if it's URL encoded
+          try {
+            token = decodeURIComponent(token)
+          } catch (e) {
+            console.warn('Failed to decode token from URL, using as-is')
+          }
+        }
+        // If no token in URL or it's invalid, use token from localStorage
+        if (!token) {
+          token = getCreditToken()
+        }
 
-        if (!tierId || !token) {
-          setMessage('Invalid credit purchase parameters')
+        if (!tierId) {
+          setMessage('Invalid credit purchase parameters: Missing tier ID')
+          setLoading(false)
+          return
+        }
+
+        if (!token) {
+          setMessage('Invalid token. Please try purchasing again from the credits page.')
           setLoading(false)
           return
         }
@@ -63,10 +82,66 @@ function PaymentSuccess() {
             if (window.refreshCreditBalance) {
               window.refreshCreditBalance()
             }
+            
+            // Force a page reload after a short delay to ensure new token is used
+            setTimeout(() => {
+              window.location.href = '/'
+            }, 2000)
           }
         } catch (error) {
           console.error('Credit purchase completion error:', error)
-          setMessage(error.response?.data?.message || 'Failed to complete credit purchase')
+          const errorMessage = error.response?.data?.message || error.message || 'Failed to complete credit purchase'
+          
+          // If token is invalid, try to get a new token and retry once
+          if ((errorMessage.includes('Invalid token') || errorMessage.includes('token')) && error.response?.status !== 400) {
+            try {
+              const userId = searchParams.get('userId')
+              if (userId) {
+                // Try to get a new token for this user
+                const { getOrCreateToken } = await import('../services/creditService')
+                const newTokenData = await getOrCreateToken(userId)
+                
+                if (newTokenData.token) {
+                  // Retry the purchase with the new token
+                  const requestData = isStripe 
+                    ? { tierId, existingToken: newTokenData.token, sessionId }
+                    : { tierId, existingToken: newTokenData.token }
+                  
+                  const retryResponse = await axios.post(`${API_URL}/api/credits/complete-purchase`, requestData)
+                  
+                  if (retryResponse.data.success) {
+                    // Save the updated token
+                    if (retryResponse.data.token) {
+                      localStorage.setItem('creditToken', retryResponse.data.token)
+                    }
+                    
+                    setSuccess(true)
+                    setMessage(retryResponse.data.message)
+                    setPlanDetails({
+                      tierId: retryResponse.data.tierName,
+                      creditsAdded: retryResponse.data.creditsAdded,
+                      creditsRemaining: retryResponse.data.creditsRemaining
+                    })
+                    
+                    if (window.refreshCreditBalance) {
+                      window.refreshCreditBalance()
+                    }
+                    
+                    setTimeout(() => {
+                      window.location.href = '/'
+                    }, 2000)
+                    return
+                  }
+                }
+              }
+            } catch (retryError) {
+              console.error('Retry with new token failed:', retryError)
+            }
+            
+            setMessage('Your session token has expired. Please try purchasing again from the credits page. Your payment was successful, but we need to refresh your token.')
+          } else {
+            setMessage(errorMessage)
+          }
         } finally {
           setLoading(false)
         }
