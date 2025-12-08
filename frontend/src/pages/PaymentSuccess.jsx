@@ -46,6 +46,11 @@ function PaymentSuccess() {
           const response = await axios.post(`${API_URL}/api/credits/complete-purchase`, requestData)
 
           if (response.data.success) {
+            // Save the updated token to localStorage
+            if (response.data.token) {
+              localStorage.setItem('creditToken', response.data.token)
+            }
+            
             setSuccess(true)
             setMessage(response.data.message)
             setPlanDetails({
@@ -53,6 +58,11 @@ function PaymentSuccess() {
               creditsAdded: response.data.creditsAdded,
               creditsRemaining: response.data.creditsRemaining
             })
+            
+            // Refresh credit balance display
+            if (window.refreshCreditBalance) {
+              window.refreshCreditBalance()
+            }
           }
         } catch (error) {
           console.error('Credit purchase completion error:', error)
