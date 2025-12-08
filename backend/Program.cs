@@ -1002,6 +1002,11 @@ app.MapPost("/api/admin/set-my-credits", async (SetMyCreditsRequest request, Htt
         // Update existing token with new credit amount
         payload.CreditsRemaining = request.Credits;
         payload.FreeSearchesUsed = 0; // Reset free searches
+        // Clear admin override if setting to 0 credits (to remove unlimited status)
+        if (request.Credits == 0)
+        {
+            payload.IsAdminOverride = false;
+        }
     }
     
     var newToken = tokenService.UpdateToken(payload);
@@ -1073,6 +1078,11 @@ app.MapPost("/api/admin/set-user-credits/{userId}", async (string userId, SetUse
         // Update existing token with new credit amount
         payload.CreditsRemaining = request.Credits;
         payload.FreeSearchesUsed = 0; // Reset free searches
+        // Clear admin override if setting to 0 credits (to remove unlimited status)
+        if (request.Credits == 0)
+        {
+            payload.IsAdminOverride = false;
+        }
     }
     
     var newToken = tokenService.UpdateToken(payload);
