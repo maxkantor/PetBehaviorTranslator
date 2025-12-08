@@ -1062,12 +1062,14 @@ app.MapPost("/api/admin/set-user-credits/{userId}", async (string userId, SetUse
     if (payload == null || payload.UserId != userId)
     {
         var config = await adminConfigService.GetConfigAsync();
+        // Check if user is admin, but if setting to 0 credits, don't mark as admin
+        var isUserAdmin = await IsAdminAsync(userId, null);
         payload = new TokenPayload
         {
             UserId = userId,
             FreeSearchesUsed = 0,
             CreditsRemaining = request.Credits,
-            IsAdmin = false,
+            IsAdmin = isUserAdmin && request.Credits > 0, // Only mark as admin if credits > 0
             IsAdminOverride = false,
             IssuedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
             ExpiresAt = DateTimeOffset.UtcNow.AddYears(1).ToUnixTimeSeconds()
@@ -1079,9 +1081,17 @@ app.MapPost("/api/admin/set-user-credits/{userId}", async (string userId, SetUse
         payload.CreditsRemaining = request.Credits;
         payload.FreeSearchesUsed = 0; // Reset free searches
         // Clear admin override if setting to 0 credits (to remove unlimited status)
+        // Also clear IsAdmin flag so they consume credits like regular users
         if (request.Credits == 0)
         {
             payload.IsAdminOverride = false;
+            payload.IsAdmin = false; // Clear admin flag so credits are consumed
+        }
+        else
+        {
+            // If setting credits > 0, restore admin status if user is in admin list
+            var isUserAdmin = await IsAdminAsync(userId, null);
+            payload.IsAdmin = isUserAdmin;
         }
     }
     
@@ -1607,7 +1617,10 @@ app.MapPost("/api/credits/use", async (UseCreditsRequest request) =>
     }
 
     // Check for admin bypass
-    if (payload.IsAdmin || payload.IsAdminOverride)
+    // Only bypass if IsAdminOverride is true (explicit override)
+    // OR if IsAdmin is true AND they have credits remaining (to allow admins to test with credits)
+    // If admin sets credits to 0, they should consume credits like regular users
+    if (payload.IsAdminOverride || (payload.IsAdmin && payload.CreditsRemaining > 0))
     {
         // Admin bypass - return token unchanged, no credit deduction
         await eventLogService.LogEventAsync(new EventLogEntry
