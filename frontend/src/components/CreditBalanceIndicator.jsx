@@ -10,7 +10,9 @@ function CreditBalanceIndicator() {
     freeSearchesRemaining: 0,
     creditsRemaining: 0,
     freeSearchesUsed: 0,
-    freeSearchLimit: 5
+    freeSearchLimit: 5,
+    isAdmin: false,
+    isAdminOverride: false
   })
   const [loading, setLoading] = useState(true)
   const [isAdmin, setIsAdmin] = useState(false)
@@ -56,8 +58,14 @@ function CreditBalanceIndicator() {
     )
   }
 
-  // Show admin badge if user is admin
-  if (isAdmin) {
+  // Show admin badge if:
+  // 1. User is admin (from admin list) AND has admin override OR credits > 0
+  // 2. OR user has admin override flag set (regardless of admin list status)
+  // If credits are 0 and override is cleared, show normal balance even if in admin list
+  const hasAdminOverride = balance.isAdminOverride || false
+  const shouldShowAdminBadge = hasAdminOverride || (isAdmin && balance.creditsRemaining > 0)
+  
+  if (shouldShowAdminBadge) {
     return (
       <div className={styles.container}>
         <div className={styles.badge} style={{ background: 'rgba(102, 126, 234, 0.2)', color: '#667eea', border: '1px solid #667eea' }}>
