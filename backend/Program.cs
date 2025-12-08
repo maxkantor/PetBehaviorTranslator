@@ -1027,6 +1027,79 @@ app.MapPost("/api/admin/set-my-credits", async (SetMyCreditsRequest request, Htt
 .WithName("SetMyCredits")
 .WithOpenApi();
 
+// POST /admin/set-user-credits/{userId} - Set specific user's credits to exact amount (ADMIN ONLY)
+app.MapPost("/api/admin/set-user-credits/{userId}", async (string userId, SetUserCreditsRequest request, HttpContext context) =>
+{
+    var adminUserId = context.Request.Query["adminUserId"].ToString();
+    var adminEmail = context.Request.Query["email"].ToString();
+    
+    var isAdmin = await IsAdminAsync(adminUserId, adminEmail);
+    if (!isAdmin)
+    {
+        return Results.Json(new { message = "Admin access required" }, statusCode: 401);
+    }
+    
+    if (string.IsNullOrWhiteSpace(userId))
+    {
+        return Results.BadRequest(new { message = "User ID is required" });
+    }
+    
+    if (request.Credits < 0)
+    {
+        return Results.BadRequest(new { message = "Credits cannot be negative" });
+    }
+    
+    // Get current token if exists
+    var existingToken = request.ExistingToken;
+    var payload = existingToken != null ? tokenService.ValidateToken(existingToken) : null;
+    
+    // Create new token with exact credit amount
+    if (payload == null || payload.UserId != userId)
+    {
+        var config = await adminConfigService.GetConfigAsync();
+        payload = new TokenPayload
+        {
+            UserId = userId,
+            FreeSearchesUsed = 0,
+            CreditsRemaining = request.Credits,
+            IsAdmin = false,
+            IsAdminOverride = false,
+            IssuedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
+            ExpiresAt = DateTimeOffset.UtcNow.AddYears(1).ToUnixTimeSeconds()
+        };
+    }
+    else
+    {
+        // Update existing token with new credit amount
+        payload.CreditsRemaining = request.Credits;
+        payload.FreeSearchesUsed = 0; // Reset free searches
+    }
+    
+    var newToken = tokenService.UpdateToken(payload);
+    
+    LogActivity(adminUserId, "SET_USER_CREDITS", $"Admin {adminUserId} set user {userId} credits to {request.Credits}");
+    
+    await eventLogService.LogEventAsync(new EventLogEntry
+    {
+        EventType = "ADMIN_SET_USER_CREDITS",
+        UserId = userId,
+        Email = adminEmail,
+        Endpoint = "/api/admin/set-user-credits",
+        Status = "SUCCESS",
+        Details = $"Admin {adminUserId} set user {userId} credits to {request.Credits}"
+    });
+    
+    return Results.Ok(new
+    {
+        success = true,
+        token = newToken,
+        creditsRemaining = payload.CreditsRemaining,
+        message = $"Successfully set credits to {request.Credits} for user {userId}"
+    });
+})
+.WithName("SetUserCredits")
+.WithOpenApi();
+
 // POST /admin/override-token - Create override token for a user
 app.MapPost("/api/admin/override-token", async (AdminOverrideTokenRequest request, HttpContext context) =>
 {
@@ -2323,6 +2396,8 @@ public record AdminConnectRequest(string UserId, string? Email = null);
 public record AdminLoginRequest(string Username, string Password);
 
 public record SetMyCreditsRequest(int Credits, string? ExistingToken = null);
+
+public record SetUserCreditsRequest(int Credits, string? ExistingToken = null);
 
 public record AdminConfigUpdateRequest(int? FreeSearchLimit = null, List<CreditTier>? Tiers = null, List<string>? AdminEmails = null);
 
