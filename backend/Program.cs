@@ -4,6 +4,8 @@ using System.Linq;
 using System.Net.Mail;
 using System.Net;
 using PetBehaviorTranslator;
+using Stripe;
+using Stripe.Checkout;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -27,56 +29,10 @@ if (app.Environment.IsDevelopment())
 
 // CORS is handled by Lambda Function URL - don't add it here
 
-// Get OpenAI API key from environment variable
-var openAiApiKey = Environment.GetEnvironmentVariable("OPENAI_API_KEY") 
-    ?? builder.Configuration["OpenAI:ApiKey"] 
-    ?? throw new InvalidOperationException("OPENAI_API_KEY environment variable is not set");
-
-// Get Affiliate configuration
-var amazonTag = Environment.GetEnvironmentVariable("AMAZON_ASSOCIATE_TAG") 
-    ?? builder.Configuration["Affiliate:AmazonAssociates:Tag"] 
-    ?? string.Empty;
-var amazonEnabled = builder.Configuration.GetValue<bool>("Affiliate:AmazonAssociates:Enabled", false);
-var trackingEnabled = builder.Configuration.GetValue<bool>("Affiliate:TrackingEnabled", true);
-
-// Get Email configuration
-var smtpHost = Environment.GetEnvironmentVariable("SMTP_HOST") 
-    ?? builder.Configuration["Email:SmtpHost"] 
-    ?? string.Empty;
-var smtpPort = builder.Configuration.GetValue<int>("Email:SmtpPort", 587);
-var smtpUsername = Environment.GetEnvironmentVariable("SMTP_USERNAME") 
-    ?? builder.Configuration["Email:SmtpUsername"] 
-    ?? string.Empty;
-var smtpPassword = Environment.GetEnvironmentVariable("SMTP_PASSWORD") 
-    ?? builder.Configuration["Email:SmtpPassword"] 
-    ?? string.Empty;
-var supportEmail = Environment.GetEnvironmentVariable("SUPPORT_EMAIL") 
-    ?? builder.Configuration["Email:SupportEmail"] 
-    ?? "support@yourdomain.com";
-var adminEmail = Environment.GetEnvironmentVariable("ADMIN_EMAIL") 
-    ?? builder.Configuration["Email:AdminEmail"] 
-    ?? string.Empty;
-
 // Get Credit System configuration
 var freeSearchLimit = builder.Configuration.GetValue<int>("CreditSystem:FreeSearchLimit", 5);
 var tokenSecretSsmParameter = builder.Configuration["CreditSystem:TokenSecretSsmParameter"] 
     ?? "/pettranslator/credit-token-secret";
-
-// Get Admin configuration
-var adminUserId = Environment.GetEnvironmentVariable("ADMIN_USER_ID") 
-    ?? builder.Configuration["Admin:AdminUserId"] 
-    ?? string.Empty;
-
-// Log admin configuration status (for debugging)
-Console.WriteLine($"[ADMIN CONFIG] Admin User ID configured: {!string.IsNullOrWhiteSpace(adminUserId)}");
-if (!string.IsNullOrWhiteSpace(adminUserId))
-{
-    Console.WriteLine($"[ADMIN CONFIG] Admin User ID: '{adminUserId}' (length: {adminUserId.Length})");
-}
-else
-{
-    Console.WriteLine("[ADMIN CONFIG] WARNING: ADMIN_USER_ID not set. Admin features will be disabled.");
-}
 
 // Initialize AWS SSM client for retrieving token secret
 string tokenSecret;
@@ -106,13 +62,161 @@ var adminConfigSsmParameter = builder.Configuration["Admin:AdminConfigSsmParamet
     ?? "/pettranslator/admin-config";
 var adminConfigService = new AdminConfigService(adminConfigSsmParameter);
 
+// Initialize SecretsService for retrieving secrets from AWS Secrets Manager
+var secretsServiceSecretName = Environment.GetEnvironmentVariable("SECRETS_MANAGER_SECRET_NAME") 
+    ?? "/pettranslator/app-secrets";
+var secretsService = new SecretsService(secretsServiceSecretName);
+
+// Get all secrets from Secrets Manager (with fallback to environment variables)
+var secrets = await secretsService.GetSecretsAsync();
+
+// Get OpenAI API key
+var openAiApiKey = await secretsService.GetSecretOrEnvAsync("OPENAI_API_KEY", "OPENAI_API_KEY");
+if (string.IsNullOrWhiteSpace(openAiApiKey))
+{
+    openAiApiKey = builder.Configuration["OpenAI:ApiKey"] 
+        ?? throw new InvalidOperationException("OPENAI_API_KEY not found in Secrets Manager or environment variables");
+}
+
+// Get Affiliate configuration
+var amazonTag = await secretsService.GetSecretOrEnvAsync("AMAZON_ASSOCIATE_TAG", "AMAZON_ASSOCIATE_TAG", string.Empty);
+var amazonEnabled = builder.Configuration.GetValue<bool>("Affiliate:AmazonAssociates:Enabled", false);
+var trackingEnabled = builder.Configuration.GetValue<bool>("Affiliate:TrackingEnabled", true);
+
+// Get Email configuration
+var smtpHost = await secretsService.GetSecretOrEnvAsync("SMTP_HOST", "SMTP_HOST", string.Empty);
+var smtpPortStr = await secretsService.GetSecretOrEnvAsync("SMTP_PORT", "SMTP_PORT", "587");
+var smtpPort = int.TryParse(smtpPortStr, out var port) ? port : builder.Configuration.GetValue<int>("Email:SmtpPort", 587);
+var smtpUsername = await secretsService.GetSecretOrEnvAsync("SMTP_USERNAME", "SMTP_USERNAME", string.Empty);
+var smtpPassword = await secretsService.GetSecretOrEnvAsync("SMTP_PASSWORD", "SMTP_PASSWORD", string.Empty);
+var supportEmail = await secretsService.GetSecretOrEnvAsync("SUPPORT_EMAIL", "SUPPORT_EMAIL", "support@yourdomain.com");
+var adminEmail = await secretsService.GetSecretOrEnvAsync("ADMIN_EMAIL", "ADMIN_EMAIL", string.Empty);
+
+// Get Stripe configuration
+var stripeSecretKey = await secretsService.GetSecretOrEnvAsync("STRIPE_SECRET_KEY", "STRIPE_SECRET_KEY", string.Empty);
+var stripeWebhookSecret = await secretsService.GetSecretOrEnvAsync("STRIPE_WEBHOOK_SECRET", "STRIPE_WEBHOOK_SECRET", string.Empty);
+var frontendUrl = await secretsService.GetSecretOrEnvAsync("FRONTEND_URL", "FRONTEND_URL", "https://www.petbehaviortranslator.com");
+
+// Get Admin configuration
+var adminUserId = await secretsService.GetSecretOrEnvAsync("ADMIN_USER_ID", "ADMIN_USER_ID", string.Empty);
+
+// Get Event Log configuration
+var eventLogBucket = await secretsService.GetSecretOrEnvAsync("EVENT_LOG_BUCKET", "EVENT_LOG_BUCKET", string.Empty);
+
 // Initialize EventLogService
-var eventLogBucket = Environment.GetEnvironmentVariable("EVENT_LOG_BUCKET");
 var eventLogService = new EventLogService(eventLogBucket);
 
 // Load credit tiers from configuration (will be overridden by admin config if available)
 var creditTiers = builder.Configuration.GetSection("CreditSystem:Tiers").Get<List<CreditTier>>() 
     ?? new List<CreditTier>();
+
+// Helper function to create Stripe checkout session for credits
+async Task<Session?> CreateStripeCheckoutSessionForCredits(string userId, int tierId, CreditTier tier, string existingToken)
+{
+    if (string.IsNullOrWhiteSpace(stripeSecretKey))
+    {
+        return null; // Stripe not configured, will fall back to mock
+    }
+
+    try
+    {
+        var options = new SessionCreateOptions
+        {
+            PaymentMethodTypes = new List<string> { "card" },
+            LineItems = new List<SessionLineItemOptions>
+            {
+                new SessionLineItemOptions
+                {
+                    PriceData = new SessionLineItemPriceDataOptions
+                    {
+                        Currency = "usd",
+                        ProductData = new SessionLineItemPriceDataProductDataOptions
+                        {
+                            Name = tier.Name,
+                            Description = tier.Description
+                        },
+                        UnitAmount = (long)(tier.Price * 100) // Convert to cents
+                    },
+                    Quantity = 1
+                }
+            },
+            Mode = "payment",
+            SuccessUrl = $"{frontendUrl}/credits/success?session_id={{CHECKOUT_SESSION_ID}}&tierId={tierId}&token={Uri.EscapeDataString(existingToken)}",
+            CancelUrl = $"{frontendUrl}/credits",
+            Metadata = new Dictionary<string, string>
+            {
+                { "userId", userId },
+                { "tierId", tierId.ToString() },
+                { "credits", tier.Credits.ToString() },
+                { "existingToken", existingToken },
+                { "purchaseType", "credits" }
+            },
+            CustomerEmail = null // Can be added if email is available
+        };
+
+        var service = new SessionService();
+        var session = await service.CreateAsync(options);
+        return session;
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"[STRIPE] Error creating checkout session: {ex.Message}");
+        return null;
+    }
+}
+
+// Helper function to create Stripe checkout session for premium
+async Task<Session?> CreateStripeCheckoutSessionForPremium(string userId, string planId, decimal price, string planName, int durationDays)
+{
+    if (string.IsNullOrWhiteSpace(stripeSecretKey))
+    {
+        return null; // Stripe not configured, will fall back to mock
+    }
+
+    try
+    {
+        var options = new SessionCreateOptions
+        {
+            PaymentMethodTypes = new List<string> { "card" },
+            LineItems = new List<SessionLineItemOptions>
+            {
+                new SessionLineItemOptions
+                {
+                    PriceData = new SessionLineItemPriceDataOptions
+                    {
+                        Currency = "usd",
+                        ProductData = new SessionLineItemPriceDataProductDataOptions
+                        {
+                            Name = planName,
+                            Description = $"Premium access for {planId} plan"
+                        },
+                        UnitAmount = (long)(price * 100) // Convert to cents
+                    },
+                    Quantity = 1
+                }
+            },
+            Mode = "payment",
+            SuccessUrl = $"{frontendUrl}/payment/success?session_id={{CHECKOUT_SESSION_ID}}&userId={userId}&planId={planId}",
+            CancelUrl = $"{frontendUrl}/premium",
+            Metadata = new Dictionary<string, string>
+            {
+                { "userId", userId },
+                { "planId", planId },
+                { "durationDays", durationDays.ToString() },
+                { "purchaseType", "premium" }
+            }
+        };
+
+        var service = new SessionService();
+        var session = await service.CreateAsync(options);
+        return session;
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"[STRIPE] Error creating checkout session: {ex.Message}");
+        return null;
+    }
+}
 
 // Helper function to generate Amazon affiliate link
 string GenerateAmazonAffiliateLink(string productName)
@@ -1079,7 +1183,7 @@ app.MapGet("/api/support/tickets/{userId}", (string userId) =>
 .WithOpenApi();
 
 // Payment endpoints
-app.MapPost("/api/payment/create-checkout", (PaymentRequest request) =>
+app.MapPost("/api/payment/create-checkout", async (PaymentRequest request) =>
 {
     if (string.IsNullOrWhiteSpace(request.UserId) || string.IsNullOrWhiteSpace(request.PlanId))
     {
@@ -1101,17 +1205,28 @@ app.MapPost("/api/payment/create-checkout", (PaymentRequest request) =>
     
     var (price, name, durationDays) = plans[request.PlanId];
     
-    // In production, integrate with Stripe here
-    // For now, create a mock checkout URL with success/cancel callbacks
-    var baseUrl = Environment.GetEnvironmentVariable("FRONTEND_URL") ?? "https://www.petbehaviortranslator.com";
-    var successUrl = $"{baseUrl}/payment/success?userId={request.UserId}&planId={request.PlanId}";
-    var cancelUrl = $"{baseUrl}/premium";
+    // Try to create Stripe checkout session
+    var stripeSession = await CreateStripeCheckoutSessionForPremium(request.UserId, request.PlanId, price, name, durationDays);
     
-    // For demo: return a mock checkout URL
-    // In production, use Stripe Checkout API
+    if (stripeSession != null && !string.IsNullOrWhiteSpace(stripeSession.Url))
+    {
+        // Stripe checkout session created successfully
+        return Results.Ok(new
+        {
+            checkoutUrl = stripeSession.Url,
+            sessionId = stripeSession.Id,
+            isStripe = true
+        });
+    }
+    
+    // Fallback to mock checkout if Stripe is not configured
+    var successUrl = $"{frontendUrl}/payment/success?userId={request.UserId}&planId={request.PlanId}";
+    var cancelUrl = $"{frontendUrl}/premium";
+    
     return Results.Ok(new
     {
-        checkoutUrl = $"{baseUrl}/payment/mock-checkout?userId={request.UserId}&planId={request.PlanId}&price={price}&name={Uri.EscapeDataString(name)}&success={Uri.EscapeDataString(successUrl)}&cancel={Uri.EscapeDataString(cancelUrl)}"
+        checkoutUrl = $"{frontendUrl}/payment/mock-checkout?userId={request.UserId}&planId={request.PlanId}&price={price}&name={Uri.EscapeDataString(name)}&success={Uri.EscapeDataString(successUrl)}&cancel={Uri.EscapeDataString(cancelUrl)}",
+        isStripe = false
     });
 })
 .WithName("CreateCheckout")
@@ -1119,22 +1234,191 @@ app.MapPost("/api/payment/create-checkout", (PaymentRequest request) =>
 
 app.MapPost("/api/payment/webhook", async (HttpContext context) =>
 {
-    // In production, verify Stripe webhook signature
-    // For now, handle mock payment completion
-    
-    using var reader = new StreamReader(context.Request.Body);
-    var body = await reader.ReadToEndAsync();
-    
-    // Parse webhook data (in production, use Stripe library)
-    // For demo purposes, just return success
-    
-    return Results.Ok(new { received = true });
+    try
+    {
+        using var reader = new StreamReader(context.Request.Body);
+        var json = await reader.ReadToEndAsync();
+        
+        // Verify webhook signature if webhook secret is configured
+        Event stripeEvent;
+        if (!string.IsNullOrWhiteSpace(stripeWebhookSecret))
+        {
+            var signature = context.Request.Headers["Stripe-Signature"].ToString();
+            if (string.IsNullOrWhiteSpace(signature))
+            {
+                return Results.BadRequest(new { message = "Missing Stripe signature" });
+            }
+            
+            try
+            {
+                stripeEvent = EventUtility.ConstructEvent(json, signature, stripeWebhookSecret);
+            }
+            catch (StripeException ex)
+            {
+                Console.WriteLine($"[STRIPE WEBHOOK] Signature verification failed: {ex.Message}");
+                return Results.BadRequest(new { message = "Invalid signature" });
+            }
+        }
+        else
+        {
+            // If no webhook secret configured, parse JSON directly (for testing)
+            stripeEvent = JsonSerializer.Deserialize<Event>(json, new JsonSerializerOptions
+            {
+                PropertyNameCaseInsensitive = true
+            }) ?? throw new InvalidOperationException("Failed to parse webhook event");
+        }
+        
+        // Handle the event
+        if (stripeEvent.Type == Events.CheckoutSessionCompleted)
+        {
+            var session = stripeEvent.Data.Object as Session;
+            if (session != null && session.Metadata != null)
+            {
+                var purchaseType = session.Metadata.GetValueOrDefault("purchaseType");
+                
+                if (purchaseType == "credits")
+                {
+                    // Handle credit purchase
+                    var userId = session.Metadata.GetValueOrDefault("userId");
+                    var tierIdStr = session.Metadata.GetValueOrDefault("tierId");
+                    var existingToken = session.Metadata.GetValueOrDefault("existingToken");
+                    var creditsStr = session.Metadata.GetValueOrDefault("credits");
+                    
+                    if (int.TryParse(tierIdStr, out var tierId) && !string.IsNullOrWhiteSpace(existingToken))
+                    {
+                        var payload = tokenService.ValidateToken(existingToken);
+                        if (payload != null)
+                        {
+                            var config = await adminConfigService.GetConfigAsync();
+                            var effectiveTiers = config.Tiers.Count > 0 ? config.Tiers : creditTiers;
+                            var tier = effectiveTiers.FirstOrDefault(t => t.Id == tierId);
+                            
+                            if (tier != null)
+                            {
+                                payload.CreditsRemaining += tier.Credits;
+                                var newToken = tokenService.UpdateToken(payload);
+                                
+                                await eventLogService.LogEventAsync(new EventLogEntry
+                                {
+                                    EventType = "PURCHASE",
+                                    UserId = userId ?? payload.UserId,
+                                    Status = "SUCCESS",
+                                    Details = $"Stripe webhook: Purchased {tier.Credits} credits from tier {tier.Name}, session={session.Id}"
+                                });
+                                
+                                Console.WriteLine($"[STRIPE WEBHOOK] Credit purchase completed: {tier.Credits} credits for user {userId}");
+                            }
+                        }
+                    }
+                }
+                else if (purchaseType == "premium")
+                {
+                    // Handle premium purchase
+                    var userId = session.Metadata.GetValueOrDefault("userId");
+                    var planId = session.Metadata.GetValueOrDefault("planId");
+                    var durationDaysStr = session.Metadata.GetValueOrDefault("durationDays");
+                    
+                    if (!string.IsNullOrWhiteSpace(userId) && !string.IsNullOrWhiteSpace(planId) && int.TryParse(durationDaysStr, out var durationDays))
+                    {
+                        if (!usageTracker.ContainsKey(userId))
+                        {
+                            usageTracker[userId] = new UserUsage { UserId = userId };
+                        }
+                        
+                        var usage = usageTracker[userId];
+                        usage.IsPremium = true;
+                        usage.PremiumExpiresAt = DateTime.UtcNow.AddDays(durationDays);
+                        usage.DailyCount = 0;
+                        
+                        await eventLogService.LogEventAsync(new EventLogEntry
+                        {
+                            EventType = "PREMIUM_PURCHASE",
+                            UserId = userId,
+                            Status = "SUCCESS",
+                            Details = $"Stripe webhook: Premium {planId} plan purchased, session={session.Id}"
+                        });
+                        
+                        Console.WriteLine($"[STRIPE WEBHOOK] Premium purchase completed: {planId} plan for user {userId}");
+                    }
+                }
+            }
+        }
+        
+        return Results.Ok(new { received = true, type = stripeEvent.Type });
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"[STRIPE WEBHOOK] Error processing webhook: {ex.Message}");
+        return Results.Problem(
+            detail: ex.Message,
+            statusCode: 500,
+            title: "Webhook processing error"
+        );
+    }
 })
 .WithName("PaymentWebhook")
 .WithOpenApi();
 
-app.MapPost("/api/payment/complete", (PaymentCompleteRequest request) =>
+app.MapPost("/api/payment/complete", async (PaymentCompleteRequest request) =>
 {
+    // Check if this is a Stripe session completion
+    if (!string.IsNullOrWhiteSpace(request.SessionId) && !string.IsNullOrWhiteSpace(stripeSecretKey))
+    {
+        try
+        {
+            var sessionService = new SessionService();
+            var session = await sessionService.GetAsync(request.SessionId);
+            
+            if (session.PaymentStatus == "paid" && session.Metadata != null)
+            {
+                var purchaseType = session.Metadata.GetValueOrDefault("purchaseType");
+                if (purchaseType == "premium")
+                {
+                    var userId = session.Metadata.GetValueOrDefault("userId");
+                    var planId = session.Metadata.GetValueOrDefault("planId");
+                    var durationDaysStr = session.Metadata.GetValueOrDefault("durationDays");
+                    
+                    if (!string.IsNullOrWhiteSpace(userId) && !string.IsNullOrWhiteSpace(planId) && int.TryParse(durationDaysStr, out var durationDays))
+                    {
+                        if (!usageTracker.ContainsKey(userId))
+                        {
+                            usageTracker[userId] = new UserUsage { UserId = userId };
+                        }
+                        
+                        var usage = usageTracker[userId];
+                        usage.IsPremium = true;
+                        usage.PremiumExpiresAt = DateTime.UtcNow.AddDays(durationDays);
+                        usage.DailyCount = 0;
+                        
+                        await eventLogService.LogEventAsync(new EventLogEntry
+                        {
+                            EventType = "PREMIUM_PURCHASE",
+                            UserId = userId,
+                            Status = "SUCCESS",
+                            Details = $"Stripe session completed: Premium {planId} plan purchased, session={session.Id}"
+                        });
+                        
+                        return Results.Ok(new
+                        {
+                            success = true,
+                            isPremium = true,
+                            message = "Payment successful! Premium access granted.",
+                            expiresAt = usage.PremiumExpiresAt,
+                            planId = planId,
+                            isStripe = true
+                        });
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[STRIPE] Error verifying session: {ex.Message}");
+            // Fall through to regular flow
+        }
+    }
+    
+    // Regular flow (for mock checkout or direct calls)
     if (string.IsNullOrWhiteSpace(request.UserId) || string.IsNullOrWhiteSpace(request.PlanId))
     {
         return Results.BadRequest(new { message = "UserId and PlanId are required" });
@@ -1159,18 +1443,19 @@ app.MapPost("/api/payment/complete", (PaymentCompleteRequest request) =>
         usageTracker[request.UserId] = new UserUsage { UserId = request.UserId };
     }
     
-    var usage = usageTracker[request.UserId];
-    usage.IsPremium = true;
-    usage.PremiumExpiresAt = DateTime.UtcNow.AddDays(planDurations[request.PlanId]);
-    usage.DailyCount = 0;
+    var usageRegular = usageTracker[request.UserId];
+    usageRegular.IsPremium = true;
+    usageRegular.PremiumExpiresAt = DateTime.UtcNow.AddDays(planDurations[request.PlanId]);
+    usageRegular.DailyCount = 0;
     
     return Results.Ok(new
     {
         success = true,
         isPremium = true,
         message = "Payment successful! Premium access granted.",
-        expiresAt = usage.PremiumExpiresAt,
-        planId = request.PlanId
+        expiresAt = usageRegular.PremiumExpiresAt,
+        planId = request.PlanId,
+        isStripe = false
     });
 })
 .WithName("CompletePayment")
@@ -1334,44 +1619,8 @@ app.MapPost("/api/credits/use", async (UseCreditsRequest request) =>
 .WithName("UseCredits")
 .WithOpenApi();
 
-// 3. POST /credits/purchase - Purchase credits (integrates with existing payment flow)
-app.MapPost("/api/credits/purchase", (PurchaseCreditsRequest request) =>
-{
-    if (request.TierId <= 0 || string.IsNullOrWhiteSpace(request.ExistingToken))
-    {
-        return Results.BadRequest(new { message = "TierId and ExistingToken are required" });
-    }
-
-    // Validate existing token
-    var payload = tokenService.ValidateToken(request.ExistingToken);
-    if (payload == null)
-    {
-        return Results.BadRequest(new { message = "Invalid token" });
-    }
-
-    // Find the tier
-    var tier = creditTiers.FirstOrDefault(t => t.Id == request.TierId);
-    if (tier == null)
-    {
-        return Results.BadRequest(new { message = "Invalid tier ID" });
-    }
-
-    // In production, integrate with Stripe/PayPal here
-    // For now, create a mock checkout URL similar to premium payment
-    var baseUrl = Environment.GetEnvironmentVariable("FRONTEND_URL") ?? "https://www.petbehaviortranslator.com";
-    var successUrl = $"{baseUrl}/credits/success?userId={payload.UserId}&tierId={tier.Id}&token={Uri.EscapeDataString(request.ExistingToken)}";
-    var cancelUrl = $"{baseUrl}/credits";
-
-    return Results.Ok(new
-    {
-        checkoutUrl = $"{baseUrl}/credits/mock-checkout?userId={payload.UserId}&tierId={tier.Id}&price={tier.Price}&name={Uri.EscapeDataString(tier.Name)}&credits={tier.Credits}&token={Uri.EscapeDataString(request.ExistingToken)}&success={Uri.EscapeDataString(successUrl)}&cancel={Uri.EscapeDataString(cancelUrl)}"
-    });
-})
-.WithName("PurchaseCredits")
-.WithOpenApi();
-
-// 4. POST /credits/complete-purchase - Complete credit purchase and update token
-app.MapPost("/api/credits/complete-purchase", async (CompletePurchaseRequest request) =>
+// 3. POST /credits/purchase - Purchase credits (integrates with Stripe)
+app.MapPost("/api/credits/purchase", async (PurchaseCreditsRequest request) =>
 {
     if (request.TierId <= 0 || string.IsNullOrWhiteSpace(request.ExistingToken))
     {
@@ -1396,26 +1645,143 @@ app.MapPost("/api/credits/complete-purchase", async (CompletePurchaseRequest req
         return Results.BadRequest(new { message = "Invalid tier ID" });
     }
 
+    // Try to create Stripe checkout session
+    var stripeSession = await CreateStripeCheckoutSessionForCredits(payload.UserId, request.TierId, tier, request.ExistingToken);
+    
+    if (stripeSession != null && !string.IsNullOrWhiteSpace(stripeSession.Url))
+    {
+        // Stripe checkout session created successfully
+        return Results.Ok(new
+        {
+            checkoutUrl = stripeSession.Url,
+            sessionId = stripeSession.Id,
+            isStripe = true
+        });
+    }
+
+    // Fallback to mock checkout if Stripe is not configured
+    var successUrl = $"{frontendUrl}/credits/success?userId={payload.UserId}&tierId={tier.Id}&token={Uri.EscapeDataString(request.ExistingToken)}";
+    var cancelUrl = $"{frontendUrl}/credits";
+
+    return Results.Ok(new
+    {
+        checkoutUrl = $"{frontendUrl}/credits/mock-checkout?userId={payload.UserId}&tierId={tier.Id}&price={tier.Price}&name={Uri.EscapeDataString(tier.Name)}&credits={tier.Credits}&token={Uri.EscapeDataString(request.ExistingToken)}&success={Uri.EscapeDataString(successUrl)}&cancel={Uri.EscapeDataString(cancelUrl)}",
+        isStripe = false
+    });
+})
+.WithName("PurchaseCredits")
+.WithOpenApi();
+
+// 4. POST /credits/complete-purchase - Complete credit purchase and update token
+app.MapPost("/api/credits/complete-purchase", async (CompletePurchaseRequest request) =>
+{
+    // Check if this is a Stripe session completion
+    if (!string.IsNullOrWhiteSpace(request.SessionId) && !string.IsNullOrWhiteSpace(stripeSecretKey))
+    {
+        try
+        {
+            var sessionService = new SessionService();
+            var session = await sessionService.GetAsync(request.SessionId);
+            
+            if (session.PaymentStatus == "paid" && session.Metadata != null)
+            {
+                var purchaseType = session.Metadata.GetValueOrDefault("purchaseType");
+                if (purchaseType == "credits")
+                {
+                    var userId = session.Metadata.GetValueOrDefault("userId");
+                    var tierIdStr = session.Metadata.GetValueOrDefault("tierId");
+                    var existingToken = session.Metadata.GetValueOrDefault("existingToken");
+                    
+                    if (int.TryParse(tierIdStr, out var tierId) && !string.IsNullOrWhiteSpace(existingToken))
+                    {
+                        var payload = tokenService.ValidateToken(existingToken);
+                        if (payload != null)
+                        {
+                            var config = await adminConfigService.GetConfigAsync();
+                            var effectiveTiers = config.Tiers.Count > 0 ? config.Tiers : creditTiers;
+                            var tier = effectiveTiers.FirstOrDefault(t => t.Id == tierId);
+                            
+                            if (tier != null)
+                            {
+                                payload.CreditsRemaining += tier.Credits;
+                                var newToken = tokenService.UpdateToken(payload);
+                                
+                                await eventLogService.LogEventAsync(new EventLogEntry
+                                {
+                                    EventType = "PURCHASE",
+                                    UserId = userId ?? payload.UserId,
+                                    Status = "SUCCESS",
+                                    Details = $"Stripe session completed: Purchased {tier.Credits} credits from tier {tier.Name}, session={session.Id}"
+                                });
+                                
+                                return Results.Ok(new
+                                {
+                                    success = true,
+                                    token = newToken,
+                                    creditsAdded = tier.Credits,
+                                    creditsRemaining = payload.CreditsRemaining,
+                                    tierName = tier.Name,
+                                    message = $"Successfully purchased {tier.Credits} credits!",
+                                    isStripe = true
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[STRIPE] Error verifying session: {ex.Message}");
+            // Fall through to regular flow
+        }
+    }
+    
+    // Regular flow (for mock checkout or direct calls)
+    if (request.TierId <= 0 || string.IsNullOrWhiteSpace(request.ExistingToken))
+    {
+        return Results.BadRequest(new { message = "TierId and ExistingToken are required" });
+    }
+
+    // Validate existing token
+    var payloadRegular = tokenService.ValidateToken(request.ExistingToken);
+    if (payloadRegular == null)
+    {
+        return Results.BadRequest(new { message = "Invalid token" });
+    }
+
+    // Get current config for tiers
+    var configRegular = await adminConfigService.GetConfigAsync();
+    var effectiveTiersRegular = configRegular.Tiers.Count > 0 ? configRegular.Tiers : creditTiers;
+
+    // Find the tier
+    var tierRegular = effectiveTiersRegular.FirstOrDefault(t => t.Id == request.TierId);
+    if (tierRegular == null)
+    {
+        return Results.BadRequest(new { message = "Invalid tier ID" });
+    }
+
     // Add credits to token
-    payload.CreditsRemaining += tier.Credits;
-    var newToken = tokenService.UpdateToken(payload);
+    payloadRegular.CreditsRemaining += tierRegular.Credits;
+    var newTokenRegular = tokenService.UpdateToken(payloadRegular);
 
     await eventLogService.LogEventAsync(new EventLogEntry
     {
         EventType = "PURCHASE",
-        UserId = payload.UserId,
+        UserId = payloadRegular.UserId,
         Status = "SUCCESS",
-        Details = $"Purchased {tier.Credits} credits from tier {tier.Name}"
+        Details = $"Purchased {tierRegular.Credits} credits from tier {tierRegular.Name}"
     });
 
     return Results.Ok(new
     {
         success = true,
-        token = newToken,
-        creditsAdded = tier.Credits,
-        creditsRemaining = payload.CreditsRemaining,
-        tierName = tier.Name,
-        message = $"Successfully purchased {tier.Credits} credits!"
+        token = newTokenRegular,
+        creditsAdded = tierRegular.Credits,
+        creditsRemaining = payloadRegular.CreditsRemaining,
+        tierName = tierRegular.Name,
+        message = $"Successfully purchased {tierRegular.Credits} credits!",
+        isStripe = false
     });
 })
 .WithName("CompleteCreditPurchase")
@@ -1934,7 +2300,7 @@ public record SupportRequest(string? UserId, string? Email, string? Subject, str
 
 public record PaymentRequest(string UserId, string PlanId);
 
-public record PaymentCompleteRequest(string UserId, string PlanId, string? TransactionId = null);
+public record PaymentCompleteRequest(string UserId, string PlanId, string? TransactionId = null, string? SessionId = null);
 
 // Credit System Records
 public record GetTokenRequest(string UserId, string? Email = null);
@@ -1943,7 +2309,7 @@ public record UseCreditsRequest(string CreditToken);
 
 public record PurchaseCreditsRequest(int TierId, string ExistingToken);
 
-public record CompletePurchaseRequest(int TierId, string ExistingToken, string? TransactionId = null);
+public record CompletePurchaseRequest(int TierId, string ExistingToken, string? TransactionId = null, string? SessionId = null);
 
 public record ValidateTokenRequest(string CreditToken);
 

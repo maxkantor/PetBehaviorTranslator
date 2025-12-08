@@ -16,6 +16,7 @@
     <PackageReference Include="AWSSDK.SimpleSystemsManagement" Version="3.7.401" />
     <PackageReference Include="AWSSDK.S3" Version="3.7.400" />
     <PackageReference Include="AWSSDK.SecretsManager" Version="3.7.400" />
+    <PackageReference Include="Stripe.net" Version="45.0.0" />
   </ItemGroup>
 
 </Project>
