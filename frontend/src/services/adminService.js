@@ -267,3 +267,28 @@ export const createOverrideToken = async (targetUserId, targetEmail, credits, ex
   }
 }
 
+// GET /api/support/tickets - Get all support tickets (admin only)
+export const getAllSupportTickets = async () => {
+  try {
+    const response = await axios.get(`${API_URL}/api/support/tickets`, getAdminParams())
+    return response.data
+  } catch (error) {
+    console.error('Error fetching support tickets:', error)
+    throw error
+  }
+}
+
+// POST /api/support/reply - Reply to a support ticket (admin only)
+export const replyToSupportTicket = async (ticketId, replyMessage) => {
+  try {
+    const response = await axios.post(`${API_URL}/api/support/reply`, {
+      ticketId,
+      replyMessage
+    }, getAdminParams())
+    return response.data
+  } catch (error) {
+    console.error('Error replying to support ticket:', error)
+    throw error
+  }
+}
+

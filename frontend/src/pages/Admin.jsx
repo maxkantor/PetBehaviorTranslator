@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { FaPaw, FaUserShield, FaCrown, FaUsers, FaToggleOn, FaToggleOff, FaSync, FaCoins, FaGift, FaHistory, FaRedo, FaTrash, FaChartBar, FaCog, FaKey, FaEnvelope, FaSignOutAlt } from 'react-icons/fa'
+import { FaPaw, FaUserShield, FaCrown, FaUsers, FaToggleOn, FaToggleOff, FaSync, FaCoins, FaGift, FaHistory, FaRedo, FaTrash, FaChartBar, FaCog, FaKey, FaEnvelope, FaSignOutAlt, FaHeadset, FaReply, FaCheckCircle } from 'react-icons/fa'
 import { getUserId } from '../services/premiumService'
-import { checkAdmin, getAllUsers, setPremiumStatus, setPremiumPlan, removePremiumStatus, grantCredits, getActivities, resetUserActivities, resetAllActivities, adminConnect, getAdminDashboard, updateAdminConfig, createOverrideToken, adminLogout, setMyCredits, setUserCredits } from '../services/adminService'
+import { checkAdmin, getAllUsers, setPremiumStatus, setPremiumPlan, removePremiumStatus, grantCredits, getActivities, resetUserActivities, resetAllActivities, adminConnect, getAdminDashboard, updateAdminConfig, createOverrideToken, adminLogout, setMyCredits, setUserCredits, getAllSupportTickets, replyToSupportTicket } from '../services/adminService'
 import { getCreditToken } from '../services/creditService'
 import axios from 'axios'
 import styles from './Admin.module.css'
@@ -27,6 +27,10 @@ function Admin() {
   const [showOverrideToken, setShowOverrideToken] = useState(false)
   const [configData, setConfigData] = useState({ freeSearchLimit: 5, tiers: [], adminEmails: [] })
   const [overrideForm, setOverrideForm] = useState({ targetUserId: '', targetEmail: '', credits: 0, expirySeconds: 86400 })
+  const [supportTickets, setSupportTickets] = useState([])
+  const [showSupportTickets, setShowSupportTickets] = useState(false)
+  const [replyingToTicket, setReplyingToTicket] = useState(null)
+  const [replyMessage, setReplyMessage] = useState('')
 
   const handleLogout = () => {
     adminLogout()
@@ -43,6 +47,7 @@ function Admin() {
         // Just load dashboard data
         await loadDashboard()
         await loadUsers()
+        await loadSupportTickets()
         setIsAdmin(true) // If they got here, they're authenticated
       } catch (error) {
         console.error('Admin initialization error:', error)
@@ -252,6 +257,44 @@ function Admin() {
         showMessage('Access denied. Admin access required.', 'error')
       } else {
         showMessage('Failed to reset all activities', 'error')
+      }
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const loadSupportTickets = async () => {
+    try {
+      const data = await getAllSupportTickets()
+      setSupportTickets(data.tickets || [])
+    } catch (error) {
+      if (error.response?.status === 401) {
+        showMessage('Access denied. Admin access required.', 'error')
+      } else {
+        console.error('Error loading support tickets:', error)
+        // Don't show error message on initial load if tickets endpoint doesn't exist yet
+      }
+    }
+  }
+
+  const handleReplyToTicket = async (ticketId) => {
+    if (!replyMessage.trim()) {
+      showMessage('Please enter a reply message', 'error')
+      return
+    }
+
+    setLoading(true)
+    try {
+      await replyToSupportTicket(ticketId, replyMessage.trim())
+      showMessage('Reply sent successfully!', 'success')
+      setReplyingToTicket(null)
+      setReplyMessage('')
+      await loadSupportTickets() // Refresh tickets
+    } catch (error) {
+      if (error.response?.status === 401) {
+        showMessage('Access denied. Admin access required.', 'error')
+      } else {
+        showMessage('Failed to send reply: ' + (error.response?.data?.message || error.message), 'error')
       }
     } finally {
       setLoading(false)
@@ -911,6 +954,159 @@ function Admin() {
           </div>
         </div>
       )}
+
+      {/* Support Tickets Section */}
+      <div className={styles.section}>
+        <h2 className={styles.sectionTitle}>
+          <FaHeadset /> Support Tickets ({supportTickets.length})
+        </h2>
+        <div className={styles.card}>
+          <div className={styles.cardActions}>
+            <button 
+              onClick={() => {
+                setShowSupportTickets(!showSupportTickets)
+                if (!showSupportTickets) {
+                  loadSupportTickets()
+                }
+              }}
+              className={styles.btnPrimary}
+            >
+              <FaHeadset /> {showSupportTickets ? 'Hide' : 'Show'} Support Tickets
+            </button>
+            <button 
+              onClick={loadSupportTickets}
+              className={styles.btnSecondary}
+              disabled={loading}
+            >
+              <FaSync className={loading ? styles.spinning : ''} /> Refresh
+            </button>
+          </div>
+          
+          {showSupportTickets && (
+            <div style={{ marginTop: '1.5rem' }}>
+              {supportTickets.length === 0 ? (
+                <p className={styles.emptyState}>No support tickets found</p>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                  {supportTickets.map((ticket) => (
+                    <div 
+                      key={ticket.ticketId} 
+                      style={{ 
+                        padding: '1.5rem', 
+                        background: 'rgba(255,255,255,0.05)', 
+                        borderRadius: '12px',
+                        border: ticket.status === 'Open' ? '2px solid #ff6b9d' : '2px solid #4ecdc4'
+                      }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', marginBottom: '0.5rem' }}>
+                            <h3 style={{ margin: 0, fontSize: '1.2rem' }}>{ticket.subject}</h3>
+                            <span style={{ 
+                              padding: '0.25rem 0.75rem', 
+                              borderRadius: '12px', 
+                              fontSize: '0.85rem',
+                              background: ticket.priority === 'High' ? 'rgba(255, 107, 157, 0.3)' : 'rgba(78, 205, 196, 0.3)',
+                              color: ticket.priority === 'High' ? '#ff6b9d' : '#4ecdc4'
+                            }}>
+                              {ticket.priority} Priority
+                            </span>
+                            <span style={{ 
+                              padding: '0.25rem 0.75rem', 
+                              borderRadius: '12px', 
+                              fontSize: '0.85rem',
+                              background: ticket.status === 'Open' ? 'rgba(255, 107, 157, 0.3)' : 'rgba(78, 205, 196, 0.3)',
+                              color: ticket.status === 'Open' ? '#ff6b9d' : '#4ecdc4'
+                            }}>
+                              {ticket.status}
+                            </span>
+                            {ticket.isPremium && (
+                              <FaCrown style={{ color: '#ffe66d', fontSize: '1rem' }} title="Premium User" />
+                            )}
+                          </div>
+                          <div style={{ fontSize: '0.9rem', opacity: 0.8, marginBottom: '0.5rem' }}>
+                            <strong>Ticket ID:</strong> {ticket.ticketId}
+                          </div>
+                          <div style={{ fontSize: '0.9rem', opacity: 0.8, marginBottom: '0.5rem' }}>
+                            <strong>From:</strong> {ticket.email} {ticket.userId && `(${ticket.userId})`}
+                          </div>
+                          <div style={{ fontSize: '0.9rem', opacity: 0.8, marginBottom: '1rem' }}>
+                            <strong>Created:</strong> {new Date(ticket.createdAt).toLocaleString()}
+                          </div>
+                          <div style={{ 
+                            padding: '1rem', 
+                            background: 'rgba(255,255,255,0.1)', 
+                            borderRadius: '8px',
+                            marginBottom: '1rem',
+                            whiteSpace: 'pre-wrap',
+                            wordBreak: 'break-word'
+                          }}>
+                            <strong>Message:</strong>
+                            <div style={{ marginTop: '0.5rem' }}>{ticket.message}</div>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      {replyingToTicket === ticket.ticketId ? (
+                        <div style={{ marginTop: '1rem', padding: '1rem', background: 'rgba(255,255,255,0.1)', borderRadius: '8px' }}>
+                          <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '600' }}>
+                            Reply Message:
+                          </label>
+                          <textarea
+                            value={replyMessage}
+                            onChange={(e) => setReplyMessage(e.target.value)}
+                            placeholder="Enter your reply..."
+                            rows={6}
+                            style={{ 
+                              width: '100%', 
+                              padding: '0.75rem', 
+                              borderRadius: '8px', 
+                              border: '2px solid #ccc',
+                              fontFamily: 'inherit',
+                              fontSize: '0.95rem',
+                              marginBottom: '0.75rem'
+                            }}
+                          />
+                          <div style={{ display: 'flex', gap: '0.5rem' }}>
+                            <button
+                              onClick={() => handleReplyToTicket(ticket.ticketId)}
+                              className={styles.btnPrimary}
+                              disabled={loading || !replyMessage.trim()}
+                            >
+                              <FaReply /> Send Reply
+                            </button>
+                            <button
+                              onClick={() => {
+                                setReplyingToTicket(null)
+                                setReplyMessage('')
+                              }}
+                              className={styles.btnSecondary}
+                              disabled={loading}
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => {
+                            setReplyingToTicket(ticket.ticketId)
+                            setReplyMessage('')
+                          }}
+                          className={styles.btnPrimary}
+                          disabled={loading || ticket.status === 'Replied'}
+                        >
+                          <FaReply /> {ticket.status === 'Replied' ? 'Already Replied' : 'Reply to Ticket'}
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
 
       {/* All Users */}
       <div className={styles.section}>
