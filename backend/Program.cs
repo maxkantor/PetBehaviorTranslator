@@ -2374,6 +2374,9 @@ Pet Behavior Translator Support Team",
                 IsBodyHtml = false
             };
             
+            // Set Reply-To header so replies go to support email
+            customerMail.ReplyToList.Add(new MailAddress(supportEmail, "Pet Behavior Translator Support"));
+            
             await client.SendMailAsync(customerMail);
         }
         
@@ -2399,9 +2402,13 @@ Message:
 {ticket.Message}
 
 ---
-Respond at: {supportEmail}",
+Reply to customer at: {ticket.Email}
+Reply-To address: {supportEmail}",
                 IsBodyHtml = false
             };
+            
+            // Set Reply-To header so admin replies go to support email
+            adminMail.ReplyToList.Add(new MailAddress(supportEmail, "Pet Behavior Translator Support"));
             
             await client.SendMailAsync(adminMail);
         }
