@@ -33,6 +33,7 @@ function Admin() {
   const [replyMessage, setReplyMessage] = useState('')
   const [userTokens, setUserTokens] = useState({}) // userId -> { token, credits }
   const [showingToken, setShowingToken] = useState({}) // userId -> boolean
+  const [selectedUserForCredits, setSelectedUserForCredits] = useState('') // User selected for credit management
 
   const handleLogout = () => {
     adminLogout()
@@ -393,6 +394,182 @@ function Admin() {
         </div>
       )}
 
+
+      {/* Set Credits for Any User */}
+      <div className={styles.section}>
+        <h2 className={styles.sectionTitle}>
+          <FaCoins /> Set Credits for Any User
+        </h2>
+        <div className={styles.card}>
+          <p style={{ marginBottom: '1rem', opacity: 0.9 }}>
+            Select a user and set their credits:
+          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            {/* User Selector */}
+            <div>
+              <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.9rem', fontWeight: '500' }}>
+                Select User:
+              </label>
+              <select
+                value={selectedUserForCredits || ''}
+                onChange={(e) => setSelectedUserForCredits(e.target.value)}
+                className={styles.planSelect}
+                style={{ width: '100%', padding: '0.75rem', fontSize: '0.9rem' }}
+              >
+                <option value="">-- Select a user --</option>
+                {users.map(user => (
+                  <option key={user.userId} value={user.userId}>
+                    {user.userId} {user.email ? `(${user.email})` : ''} {user.isPremium ? '⭐ Premium' : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Quick Set Buttons */}
+            {selectedUserForCredits && (
+              <div>
+                <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.9rem', fontWeight: '500' }}>
+                  Quick Set:
+                </label>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+                  <button
+                    onClick={() => {
+                      setUserCustomCredits({ ...userCustomCredits, [selectedUserForCredits]: 0 })
+                      handleSetUserCredits(selectedUserForCredits)
+                    }}
+                    className={styles.btnPrimary}
+                    disabled={loading || settingCredits === selectedUserForCredits}
+                    style={{ fontSize: '0.85rem', padding: '0.5rem 1rem' }}
+                  >
+                    <FaCoins /> 0
+                  </button>
+                  <button
+                    onClick={() => {
+                      setUserCustomCredits({ ...userCustomCredits, [selectedUserForCredits]: 5 })
+                      handleSetUserCredits(selectedUserForCredits)
+                    }}
+                    className={styles.btnPrimary}
+                    disabled={loading || settingCredits === selectedUserForCredits}
+                    style={{ fontSize: '0.85rem', padding: '0.5rem 1rem' }}
+                  >
+                    <FaCoins /> 5
+                  </button>
+                  <button
+                    onClick={() => {
+                      setUserCustomCredits({ ...userCustomCredits, [selectedUserForCredits]: 20 })
+                      handleSetUserCredits(selectedUserForCredits)
+                    }}
+                    className={styles.btnPrimary}
+                    disabled={loading || settingCredits === selectedUserForCredits}
+                    style={{ fontSize: '0.85rem', padding: '0.5rem 1rem' }}
+                  >
+                    <FaCoins /> 20
+                  </button>
+                  <button
+                    onClick={() => {
+                      setUserCustomCredits({ ...userCustomCredits, [selectedUserForCredits]: 50 })
+                      handleSetUserCredits(selectedUserForCredits)
+                    }}
+                    className={styles.btnPrimary}
+                    disabled={loading || settingCredits === selectedUserForCredits}
+                    style={{ fontSize: '0.85rem', padding: '0.5rem 1rem' }}
+                  >
+                    <FaCoins /> 50
+                  </button>
+                  <button
+                    onClick={() => {
+                      setUserCustomCredits({ ...userCustomCredits, [selectedUserForCredits]: 120 })
+                      handleSetUserCredits(selectedUserForCredits)
+                    }}
+                    className={styles.btnPrimary}
+                    disabled={loading || settingCredits === selectedUserForCredits}
+                    style={{ fontSize: '0.85rem', padding: '0.5rem 1rem' }}
+                  >
+                    <FaCoins /> 120
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Custom Amount Input */}
+            {selectedUserForCredits && (
+              <div>
+                <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.9rem', fontWeight: '500' }}>
+                  Custom Amount:
+                </label>
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <input
+                    type="number"
+                    min="0"
+                    placeholder="Enter credit amount"
+                    value={userCustomCredits[selectedUserForCredits] ?? ''}
+                    onChange={(e) => setUserCustomCredits({ ...userCustomCredits, [selectedUserForCredits]: e.target.value === '' ? '' : parseInt(e.target.value) || 0 })}
+                    className={styles.creditsInputField}
+                    style={{ flex: 1, fontSize: '0.9rem', padding: '0.75rem' }}
+                  />
+                  <button
+                    onClick={() => handleSetUserCredits(selectedUserForCredits)}
+                    className={styles.btnPrimary}
+                    disabled={loading || settingCredits === selectedUserForCredits}
+                    style={{ fontSize: '0.85rem', padding: '0.75rem 1.5rem' }}
+                  >
+                    {settingCredits === selectedUserForCredits ? (
+                      <>
+                        <FaSync className={styles.spinning} /> Setting...
+                      </>
+                    ) : (
+                      <>
+                        <FaCoins /> Set Credits
+                      </>
+                    )}
+                  </button>
+                </div>
+                <p style={{ fontSize: '0.75rem', opacity: 0.7, marginTop: '0.5rem', fontStyle: 'italic' }}>
+                  This will create/update the user's credit token with the exact amount specified
+                </p>
+              </div>
+            )}
+
+            {/* Grant Credits (Add to existing) */}
+            {selectedUserForCredits && (
+              <div>
+                <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.9rem', fontWeight: '500' }}>
+                  Grant Credits (Add to existing):
+                </label>
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <input
+                    type="number"
+                    min="1"
+                    value={creditsToGrant}
+                    onChange={(e) => setCreditsToGrant(parseInt(e.target.value) || 100)}
+                    className={styles.creditsInputField}
+                    style={{ flex: 1, fontSize: '0.9rem', padding: '0.75rem' }}
+                  />
+                  <button
+                    onClick={() => handleGrantCredits(selectedUserForCredits)}
+                    className={styles.btnPrimary}
+                    disabled={loading || grantingCredits === selectedUserForCredits}
+                    style={{ fontSize: '0.85rem', padding: '0.75rem 1.5rem', background: '#4ecdc4' }}
+                  >
+                    {grantingCredits === selectedUserForCredits ? (
+                      <>
+                        <FaSync className={styles.spinning} /> Granting...
+                      </>
+                    ) : (
+                      <>
+                        <FaCoins /> Grant Credits
+                      </>
+                    )}
+                  </button>
+                </div>
+                <p style={{ fontSize: '0.75rem', opacity: 0.7, marginTop: '0.5rem', fontStyle: 'italic' }}>
+                  This will add credits to the user's existing balance
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
 
       {/* Self-Service: Set Your Credits */}
       <div className={styles.section}>
@@ -1265,67 +1442,67 @@ function Admin() {
                   <h4 style={{ margin: '0 0 0.75rem 0', fontSize: '1rem', color: '#4ecdc4' }}>
                     <FaCoins /> Credits & Token Management
                   </h4>
-                  
-                  {/* Grant Credits Section */}
-                  <div className={styles.creditsSection}>
+                
+                {/* Grant Credits Section */}
+                <div className={styles.creditsSection}>
                     <label style={{ fontSize: '0.9rem' }}>Grant Credits (Add to existing):</label>
-                    <div className={styles.creditsInput}>
-                      <input
-                        type="number"
-                        min="1"
-                        value={creditsToGrant}
-                        onChange={(e) => setCreditsToGrant(parseInt(e.target.value) || 100)}
-                        className={styles.creditsInputField}
+                  <div className={styles.creditsInput}>
+                    <input
+                      type="number"
+                      min="1"
+                      value={creditsToGrant}
+                      onChange={(e) => setCreditsToGrant(parseInt(e.target.value) || 100)}
+                      className={styles.creditsInputField}
                         style={{ fontSize: '0.9rem' }}
-                      />
-                      <button 
-                        onClick={() => handleGrantCredits(user.userId)}
-                        className={styles.btnCredits}
-                        disabled={loading || grantingCredits === user.userId}
+                    />
+                    <button 
+                      onClick={() => handleGrantCredits(user.userId)}
+                      className={styles.btnCredits}
+                      disabled={loading || grantingCredits === user.userId}
                         style={{ fontSize: '0.85rem' }}
-                      >
-                        {grantingCredits === user.userId ? (
-                          <>
-                            <FaSync className={styles.spinning} /> Granting...
-                          </>
-                        ) : (
-                          <>
-                            <FaCoins /> Grant Credits
-                          </>
-                        )}
-                      </button>
-                    </div>
+                    >
+                      {grantingCredits === user.userId ? (
+                        <>
+                          <FaSync className={styles.spinning} /> Granting...
+                        </>
+                      ) : (
+                        <>
+                          <FaCoins /> Grant Credits
+                        </>
+                      )}
+                    </button>
                   </div>
+                </div>
 
-                  {/* Set Custom Credits Section */}
+                {/* Set Custom Credits Section */}
                   <div className={styles.creditsSection} style={{ marginTop: '0.75rem' }}>
                     <label style={{ fontSize: '0.9rem' }}>Set Credits (Exact Amount - Updates Token):</label>
-                    <div className={styles.creditsInput}>
-                      <input
-                        type="number"
-                        min="0"
-                        placeholder="Enter amount"
-                        value={userCustomCredits[user.userId] ?? ''}
-                        onChange={(e) => setUserCustomCredits({ ...userCustomCredits, [user.userId]: e.target.value === '' ? '' : parseInt(e.target.value) || 0 })}
-                        className={styles.creditsInputField}
+                  <div className={styles.creditsInput}>
+                    <input
+                      type="number"
+                      min="0"
+                      placeholder="Enter amount"
+                      value={userCustomCredits[user.userId] ?? ''}
+                      onChange={(e) => setUserCustomCredits({ ...userCustomCredits, [user.userId]: e.target.value === '' ? '' : parseInt(e.target.value) || 0 })}
+                      className={styles.creditsInputField}
                         style={{ fontSize: '0.9rem' }}
-                      />
-                      <button 
-                        onClick={() => handleSetUserCredits(user.userId)}
-                        className={styles.btnCredits}
-                        disabled={loading || settingCredits === user.userId}
+                    />
+                    <button 
+                      onClick={() => handleSetUserCredits(user.userId)}
+                      className={styles.btnCredits}
+                      disabled={loading || settingCredits === user.userId}
                         style={{ background: '#667eea', fontSize: '0.85rem' }}
-                      >
-                        {settingCredits === user.userId ? (
-                          <>
-                            <FaSync className={styles.spinning} /> Setting...
-                          </>
-                        ) : (
-                          <>
+                    >
+                      {settingCredits === user.userId ? (
+                        <>
+                          <FaSync className={styles.spinning} /> Setting...
+                        </>
+                      ) : (
+                        <>
                             <FaCoins /> Set Credits & Update Token
-                          </>
-                        )}
-                      </button>
+                        </>
+                      )}
+                    </button>
                     </div>
                     <p style={{ fontSize: '0.75rem', opacity: 0.7, marginTop: '0.25rem', fontStyle: 'italic' }}>
                       This will create/update the user's credit token with the exact amount specified

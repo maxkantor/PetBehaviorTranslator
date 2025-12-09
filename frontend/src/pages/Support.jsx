@@ -59,7 +59,7 @@ function Support() {
       setErrors(newErrors)
       return
     }
-    
+
     // Clear errors if validation passes
     setErrors({})
     setLoading(true)
