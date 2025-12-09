@@ -1296,6 +1296,127 @@ app.MapGet("/api/support/tickets/{userId}", (string userId) =>
 .WithName("GetUserTickets")
 .WithOpenApi();
 
+// Get all support tickets (admin only)
+app.MapGet("/api/support/tickets", (HttpContext context) =>
+{
+    var adminUserId = context.Request.Query["adminUserId"].ToString();
+    if (!IsAdmin(adminUserId))
+    {
+        return Results.Unauthorized();
+    }
+    
+    var allTickets = supportTickets
+        .OrderByDescending(t => t.CreatedAt)
+        .Select(t => new
+        {
+            t.TicketId,
+            t.UserId,
+            t.Email,
+            t.Subject,
+            t.Message,
+            t.Status,
+            t.Priority,
+            t.IsPremium,
+            t.CreatedAt
+        })
+        .ToList();
+    
+    return Results.Ok(new { tickets = allTickets });
+})
+.WithName("GetAllSupportTickets")
+.WithOpenApi();
+
+// Reply to a support ticket (admin only)
+app.MapPost("/api/support/reply", async (SupportReplyRequest request, HttpContext context) =>
+{
+    var adminUserId = context.Request.Query["adminUserId"].ToString();
+    if (!IsAdmin(adminUserId))
+    {
+        return Results.Unauthorized();
+    }
+    
+    if (string.IsNullOrWhiteSpace(request.TicketId))
+    {
+        return Results.BadRequest(new { message = "Ticket ID is required" });
+    }
+    
+    if (string.IsNullOrWhiteSpace(request.ReplyMessage))
+    {
+        return Results.BadRequest(new { message = "Reply message is required" });
+    }
+    
+    var ticket = supportTickets.FirstOrDefault(t => t.TicketId == request.TicketId);
+    if (ticket == null)
+    {
+        return Results.NotFound(new { message = "Ticket not found" });
+    }
+    
+    // Update ticket status
+    ticket.Status = "Replied";
+    
+    // Send reply email to customer
+    try
+    {
+        if (string.IsNullOrWhiteSpace(smtpHost) || string.IsNullOrWhiteSpace(smtpUsername) || string.IsNullOrWhiteSpace(smtpPassword))
+        {
+            return Results.Ok(new { success = true, message = "Reply saved. Email not configured, so email was not sent." });
+        }
+        
+        using var client = new SmtpClient(smtpHost, smtpPort)
+        {
+            EnableSsl = true,
+            Credentials = new NetworkCredential(smtpUsername, smtpPassword)
+        };
+        
+        var replyMail = new MailMessage
+        {
+            From = new MailAddress(supportEmail, "Pet Behavior Translator Support"),
+            To = { ticket.Email },
+            Subject = $"Re: {ticket.Subject} (Ticket #{ticket.TicketId})",
+            Body = $@"Hi,
+
+Thank you for contacting Pet Behavior Translator support.
+
+Regarding your ticket #{ticket.TicketId}:
+
+{request.ReplyMessage}
+
+---
+Original Message:
+{ticket.Message}
+
+Best regards,
+Pet Behavior Translator Support Team",
+            IsBodyHtml = false
+        };
+        
+        // Set Reply-To header
+        replyMail.ReplyToList.Add(new MailAddress(supportEmail, "Pet Behavior Translator Support"));
+        
+        await client.SendMailAsync(replyMail);
+        
+        return Results.Ok(new 
+        { 
+            success = true, 
+            message = "Reply sent successfully",
+            ticketId = ticket.TicketId
+        });
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"Failed to send reply email: {ex.Message}");
+        return Results.Ok(new 
+        { 
+            success = true, 
+            message = "Reply saved but email sending failed. Please check email configuration.",
+            ticketId = ticket.TicketId,
+            error = ex.Message
+        });
+    }
+})
+.WithName("ReplyToSupportTicket")
+.WithOpenApi();
+
 // Payment endpoints
 app.MapPost("/api/payment/create-checkout", async (PaymentRequest request) =>
 {
@@ -2437,6 +2558,8 @@ public record TranslateRequest(string Behavior, string? UserId = null, string? C
 public record PremiumStatusRequest(string UserId, bool IsPremium, DateTime? ExpiresAt = null);
 
 public record SupportRequest(string? UserId, string? Email, string? Subject, string Message);
+
+public record SupportReplyRequest(string TicketId, string ReplyMessage);
 
 public record PaymentRequest(string UserId, string PlanId);
 
