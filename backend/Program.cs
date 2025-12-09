@@ -1032,6 +1032,43 @@ app.MapPost("/api/admin/set-my-credits", async (SetMyCreditsRequest request, Htt
 .WithName("SetMyCredits")
 .WithOpenApi();
 
+// GET /admin/user-credits/{userId} - Get user credit balance and token info (ADMIN ONLY)
+app.MapGet("/api/admin/user-credits/{userId}", async (string userId, HttpContext context) =>
+{
+    var adminUserId = context.Request.Query["adminUserId"].ToString();
+    var adminEmail = context.Request.Query["email"].ToString();
+    
+    var isAdmin = await IsAdminAsync(adminUserId, adminEmail);
+    if (!isAdmin)
+    {
+        return Results.Json(new { message = "Admin access required" }, statusCode: 401);
+    }
+    
+    if (string.IsNullOrWhiteSpace(userId))
+    {
+        return Results.BadRequest(new { message = "User ID is required" });
+    }
+    
+    // Try to find user's token from usage tracker or create a default response
+    var config = await adminConfigService.GetConfigAsync();
+    var effectiveFreeLimit = config.FreeSearchLimit > 0 ? config.FreeSearchLimit : freeSearchLimit;
+    
+    // Check if user has a token stored (we'd need to track this, but for now return basic info)
+    // For now, return user info from usage tracker
+    var userInfo = usageTracker.ContainsKey(userId) ? usageTracker[userId] : null;
+    
+    return Results.Ok(new
+    {
+        userId = userId,
+        isPremium = userInfo?.IsPremium ?? false,
+        premiumExpiresAt = userInfo?.PremiumExpiresAt,
+        freeSearchLimit = effectiveFreeLimit,
+        message = "Use set-user-credits endpoint to get/create token for this user"
+    });
+})
+.WithName("GetUserCredits")
+.WithOpenApi();
+
 // POST /admin/set-user-credits/{userId} - Set specific user's credits to exact amount (ADMIN ONLY)
 app.MapPost("/api/admin/set-user-credits/{userId}", async (string userId, SetUserCreditsRequest request, HttpContext context) =>
 {
