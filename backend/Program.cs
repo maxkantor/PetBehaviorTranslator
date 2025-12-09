@@ -1201,6 +1201,27 @@ var supportTickets = new List<SupportTicket>();
 
 app.MapPost("/api/support/contact", async (SupportRequest request) =>
 {
+    // Validate required fields
+    if (string.IsNullOrWhiteSpace(request.Email))
+    {
+        return Results.BadRequest(new { message = "Email is required" });
+    }
+    
+    // Validate email format
+    try
+    {
+        var mailAddress = new System.Net.Mail.MailAddress(request.Email);
+    }
+    catch
+    {
+        return Results.BadRequest(new { message = "Please enter a valid email address" });
+    }
+    
+    if (string.IsNullOrWhiteSpace(request.Subject))
+    {
+        return Results.BadRequest(new { message = "Subject is required" });
+    }
+    
     if (string.IsNullOrWhiteSpace(request.Message))
     {
         return Results.BadRequest(new { message = "Message is required" });
@@ -1220,9 +1241,9 @@ app.MapPost("/api/support/contact", async (SupportRequest request) =>
     {
         TicketId = Guid.NewGuid().ToString(),
         UserId = request.UserId ?? "anonymous",
-        Email = request.Email ?? "no-email",
-        Subject = request.Subject ?? "General Inquiry",
-        Message = request.Message,
+        Email = request.Email.Trim(),
+        Subject = request.Subject.Trim(),
+        Message = request.Message.Trim(),
         IsPremium = isPremium,
         Priority = isPremium ? "High" : "Normal",
         CreatedAt = DateTime.UtcNow,
