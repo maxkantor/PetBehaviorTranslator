@@ -100,6 +100,18 @@
   box-shadow: 0 0 0 3px rgba(78, 205, 196, 0.1);
 }
 
+.inputError {
+  border-color: #ff6b9d !important;
+  box-shadow: 0 0 0 3px rgba(255, 107, 157, 0.1) !important;
+}
+
+.errorMessage {
+  color: #ff6b9d;
+  font-size: 0.875rem;
+  margin-top: 0.25rem;
+  display: block;
+}
+
 .textarea {
   resize: vertical;
   min-height: 150px;
@@ -166,19 +178,25 @@
   gap: 0.5rem;
 }
 
-.backLink {
+.backButton {
   display: inline-flex;
   align-items: center;
   gap: 0.75rem;
-  margin-top: 2rem;
-  color: #4ecdc4;
+  padding: 1rem 2rem;
+  background: linear-gradient(135deg, #4ecdc4 0%, #44a08d 100%);
+  color: white;
   text-decoration: none;
-  font-weight: 600;
-  transition: color 0.3s ease;
+  border-radius: 12px;
+  font-weight: 700;
+  font-size: 1.1rem;
+  box-shadow: 0 6px 20px rgba(78, 205, 196, 0.4);
+  transition: all 0.3s ease;
+  margin-top: 2rem;
 }
 
-.backLink:hover {
-  color: #44a08d;
+.backButton:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 24px rgba(78, 205, 196, 0.5);
 }
 
 .successContainer {

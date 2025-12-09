@@ -15,6 +15,7 @@ function Support() {
   const [submitted, setSubmitted] = useState(false)
   const [userIsPremium, setUserIsPremium] = useState(false)
   const [ticketId, setTicketId] = useState(null)
+  const [errors, setErrors] = useState({})
 
   // Check premium status on mount
   useEffect(() => {
@@ -25,22 +26,50 @@ function Support() {
     checkPremium()
   }, [])
 
+  const validateEmail = (email) => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    return emailRegex.test(email)
+  }
+
   const handleSubmit = async (e) => {
     e.preventDefault()
     
+    // Reset errors
+    const newErrors = {}
+    
+    // Validate email
+    if (!email.trim()) {
+      newErrors.email = 'Email is required'
+    } else if (!validateEmail(email.trim())) {
+      newErrors.email = 'Please enter a valid email address'
+    }
+    
+    // Validate subject
+    if (!subject.trim()) {
+      newErrors.subject = 'Subject is required'
+    }
+    
+    // Validate message
     if (!message.trim()) {
-      alert('Please enter your message')
+      newErrors.message = 'Message is required'
+    }
+    
+    // If there are errors, set them and return
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors)
       return
     }
-
+    
+    // Clear errors if validation passes
+    setErrors({})
     setLoading(true)
 
     try {
       const userId = getUserId()
       const response = await axios.post(`${API_URL}/api/support/contact`, {
         userId: userId,
-        email: email || undefined,
-        subject: subject || undefined,
+        email: email.trim(),
+        subject: subject.trim(),
         message: message.trim()
       })
 
@@ -102,30 +131,44 @@ function Support() {
           <div className={styles.formGroup}>
             <label htmlFor="email" className={styles.label}>
               <FaEnvelope className={styles.labelIcon} />
-              Email (optional)
+              Email *
             </label>
             <input
               type="email"
               id="email"
-              className={styles.input}
+              className={`${styles.input} ${errors.email ? styles.inputError : ''}`}
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              onChange={(e) => {
+                setEmail(e.target.value)
+                if (errors.email) {
+                  setErrors({ ...errors, email: '' })
+                }
+              }}
               placeholder="your@email.com"
+              required
             />
+            {errors.email && <span className={styles.errorMessage}>{errors.email}</span>}
           </div>
 
           <div className={styles.formGroup}>
             <label htmlFor="subject" className={styles.label}>
-              Subject (optional)
+              Subject *
             </label>
             <input
               type="text"
               id="subject"
-              className={styles.input}
+              className={`${styles.input} ${errors.subject ? styles.inputError : ''}`}
               value={subject}
-              onChange={(e) => setSubject(e.target.value)}
+              onChange={(e) => {
+                setSubject(e.target.value)
+                if (errors.subject) {
+                  setErrors({ ...errors, subject: '' })
+                }
+              }}
               placeholder="What's this about?"
+              required
             />
+            {errors.subject && <span className={styles.errorMessage}>{errors.subject}</span>}
           </div>
 
           <div className={styles.formGroup}>
@@ -134,19 +177,25 @@ function Support() {
             </label>
             <textarea
               id="message"
-              className={styles.textarea}
+              className={`${styles.textarea} ${errors.message ? styles.inputError : ''}`}
               value={message}
-              onChange={(e) => setMessage(e.target.value)}
+              onChange={(e) => {
+                setMessage(e.target.value)
+                if (errors.message) {
+                  setErrors({ ...errors, message: '' })
+                }
+              }}
               placeholder="Describe your question or issue..."
               rows={8}
               required
             />
+            {errors.message && <span className={styles.errorMessage}>{errors.message}</span>}
           </div>
 
           <button
             type="submit"
             className={styles.submitButton}
-            disabled={loading || !message.trim()}
+            disabled={loading || !email.trim() || !subject.trim() || !message.trim()}
           >
             {loading ? (
               <>
@@ -174,7 +223,7 @@ function Support() {
           </ul>
         </div>
 
-        <Link to="/" className={styles.backLink}>
+        <Link to="/" className={styles.backButton}>
           <FaPaw />
           Back to Translator
         </Link>
