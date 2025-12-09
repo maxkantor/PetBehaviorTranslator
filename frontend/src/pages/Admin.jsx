@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { FaPaw, FaUserShield, FaCrown, FaUsers, FaToggleOn, FaToggleOff, FaSync, FaCoins, FaGift, FaHistory, FaRedo, FaTrash, FaChartBar, FaCog, FaKey, FaEnvelope, FaSignOutAlt, FaHeadset, FaReply, FaCheckCircle } from 'react-icons/fa'
+import { FaPaw, FaUserShield, FaCrown, FaUsers, FaToggleOn, FaToggleOff, FaSync, FaCoins, FaGift, FaHistory, FaRedo, FaTrash, FaChartBar, FaCog, FaKey, FaEnvelope, FaSignOutAlt, FaHeadset, FaReply, FaCheckCircle, FaCopy } from 'react-icons/fa'
 import { getUserId } from '../services/premiumService'
 import { checkAdmin, getAllUsers, setPremiumStatus, setPremiumPlan, removePremiumStatus, grantCredits, getActivities, resetUserActivities, resetAllActivities, adminConnect, getAdminDashboard, updateAdminConfig, createOverrideToken, adminLogout, setMyCredits, setUserCredits, getAllSupportTickets, replyToSupportTicket } from '../services/adminService'
 import { getCreditToken } from '../services/creditService'
@@ -31,6 +31,8 @@ function Admin() {
   const [showSupportTickets, setShowSupportTickets] = useState(false)
   const [replyingToTicket, setReplyingToTicket] = useState(null)
   const [replyMessage, setReplyMessage] = useState('')
+  const [userTokens, setUserTokens] = useState({}) // userId -> { token, credits }
+  const [showingToken, setShowingToken] = useState({}) // userId -> boolean
 
   const handleLogout = () => {
     adminLogout()
@@ -161,12 +163,52 @@ function Admin() {
     }
   }
 
+
+  const handleSetUserCredits = async (userId) => {
+    const credits = userCustomCredits[userId] ?? 0
+    if (credits < 0) {
+      showMessage('Credits cannot be negative', 'error')
+      return
+    }
+    setSettingCredits(userId)
+    try {
+      const token = getCreditToken()
+      const result = await setUserCredits(userId, credits, token)
+      showMessage(`Set ${userId} credits to ${credits}. New token generated.`, 'success')
+      
+      // Store the new token for this user
+      if (result.token) {
+        setUserTokens({ ...userTokens, [userId]: { token: result.token, credits: result.creditsRemaining || credits } })
+        setShowingToken({ ...showingToken, [userId]: true })
+      }
+      
+      // Clear the input
+      setUserCustomCredits({ ...userCustomCredits, [userId]: '' })
+      await loadUsers() // Refresh user list
+    } catch (error) {
+      if (error.response?.status === 401) {
+        showMessage('Access denied. Admin access required.', 'error')
+      } else {
+        showMessage('Failed to set credits: ' + (error.response?.data?.message || error.message), 'error')
+      }
+    } finally {
+      setSettingCredits(null)
+    }
+  }
+
   const handleGrantCredits = async (userId) => {
     setGrantingCredits(userId)
     try {
       const token = getCreditToken()
       const result = await grantCredits(userId, creditsToGrant, token)
-      showMessage(`Granted ${creditsToGrant} credits to ${userId}. New token: ${result.token.substring(0, 20)}...`, 'success')
+      showMessage(`Granted ${creditsToGrant} credits to ${userId}. New token generated.`, 'success')
+      
+      // Store the new token for this user
+      if (result.token) {
+        setUserTokens({ ...userTokens, [userId]: { token: result.token, credits: result.creditsRemaining } })
+        setShowingToken({ ...showingToken, [userId]: true })
+      }
+      
       // If granting to current user, update their token
       if (userId === currentUserId && result.token) {
         localStorage.setItem('creditToken', result.token)
@@ -180,31 +222,6 @@ function Admin() {
       }
     } finally {
       setGrantingCredits(null)
-    }
-  }
-
-  const handleSetUserCredits = async (userId) => {
-    const credits = userCustomCredits[userId] ?? 0
-    if (credits < 0) {
-      showMessage('Credits cannot be negative', 'error')
-      return
-    }
-    setSettingCredits(userId)
-    try {
-      const token = getCreditToken()
-      const result = await setUserCredits(userId, credits, token)
-      showMessage(`Set ${userId} credits to ${credits}`, 'success')
-      // Clear the input
-      setUserCustomCredits({ ...userCustomCredits, [userId]: '' })
-      await loadUsers() // Refresh user list
-    } catch (error) {
-      if (error.response?.status === 401) {
-        showMessage('Access denied. Admin access required.', 'error')
-      } else {
-        showMessage('Failed to set credits: ' + (error.response?.data?.message || error.message), 'error')
-      }
-    } finally {
-      setSettingCredits(null)
     }
   }
 
@@ -1136,7 +1153,66 @@ function Admin() {
                     <strong>Expires:</strong> {new Date(user.premiumExpiresAt).toLocaleDateString()}
                   </p>
                 )}
+                {userTokens[user.userId] && (
+                  <p style={{ marginTop: '0.5rem', padding: '0.5rem', background: 'rgba(78, 205, 196, 0.2)', borderRadius: '6px' }}>
+                    <strong>Credits:</strong> {userTokens[user.userId].credits}
+                  </p>
+                )}
               </div>
+              
+              {/* Token Display */}
+              {showingToken[user.userId] && userTokens[user.userId] && (
+                <div style={{ 
+                  marginTop: '1rem', 
+                  padding: '1rem', 
+                  background: 'rgba(255,255,255,0.1)', 
+                  borderRadius: '8px',
+                  border: '2px solid #4ecdc4'
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                    <strong style={{ fontSize: '0.9rem' }}>New Token Generated:</strong>
+                    <button
+                      onClick={() => {
+                        setShowingToken({ ...showingToken, [user.userId]: false })
+                      }}
+                      style={{ 
+                        background: 'transparent', 
+                        border: 'none', 
+                        color: '#fff', 
+                        cursor: 'pointer',
+                        fontSize: '1.2rem'
+                      }}
+                    >
+                      ×
+                    </button>
+                  </div>
+                  <div style={{ 
+                    padding: '0.75rem', 
+                    background: 'rgba(0,0,0,0.2)', 
+                    borderRadius: '6px',
+                    marginBottom: '0.5rem',
+                    wordBreak: 'break-all',
+                    fontSize: '0.85rem',
+                    fontFamily: 'monospace'
+                  }}>
+                    {userTokens[user.userId].token}
+                  </div>
+                  <button
+                    onClick={async () => {
+                      try {
+                        await navigator.clipboard.writeText(userTokens[user.userId].token)
+                        showMessage('Token copied to clipboard!', 'success')
+                      } catch (error) {
+                        showMessage('Failed to copy token', 'error')
+                      }
+                    }}
+                    className={styles.btnSecondary}
+                    style={{ fontSize: '0.85rem', padding: '0.5rem 1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}
+                  >
+                    <FaCopy /> Copy Token
+                  </button>
+                </div>
+              )}
               
               <div className={styles.userActions}>
                 {user.isPremium ? (
@@ -1178,63 +1254,82 @@ function Admin() {
                   </button>
                 )}
                 
-                {/* Grant Credits Section */}
-                <div className={styles.creditsSection}>
-                  <label>Grant Credits (Add):</label>
-                  <div className={styles.creditsInput}>
-                    <input
-                      type="number"
-                      min="1"
-                      value={creditsToGrant}
-                      onChange={(e) => setCreditsToGrant(parseInt(e.target.value) || 100)}
-                      className={styles.creditsInputField}
-                    />
-                    <button 
-                      onClick={() => handleGrantCredits(user.userId)}
-                      className={styles.btnCredits}
-                      disabled={loading || grantingCredits === user.userId}
-                    >
-                      {grantingCredits === user.userId ? (
-                        <>
-                          <FaSync className={styles.spinning} /> Granting...
-                        </>
-                      ) : (
-                        <>
-                          <FaCoins /> Grant Credits
-                        </>
-                      )}
-                    </button>
+                {/* Credits Management Section */}
+                <div style={{ 
+                  marginTop: '1rem', 
+                  padding: '1rem', 
+                  background: 'rgba(78, 205, 196, 0.1)', 
+                  borderRadius: '8px',
+                  border: '1px solid rgba(78, 205, 196, 0.3)'
+                }}>
+                  <h4 style={{ margin: '0 0 0.75rem 0', fontSize: '1rem', color: '#4ecdc4' }}>
+                    <FaCoins /> Credits & Token Management
+                  </h4>
+                  
+                  {/* Grant Credits Section */}
+                  <div className={styles.creditsSection}>
+                    <label style={{ fontSize: '0.9rem' }}>Grant Credits (Add to existing):</label>
+                    <div className={styles.creditsInput}>
+                      <input
+                        type="number"
+                        min="1"
+                        value={creditsToGrant}
+                        onChange={(e) => setCreditsToGrant(parseInt(e.target.value) || 100)}
+                        className={styles.creditsInputField}
+                        style={{ fontSize: '0.9rem' }}
+                      />
+                      <button 
+                        onClick={() => handleGrantCredits(user.userId)}
+                        className={styles.btnCredits}
+                        disabled={loading || grantingCredits === user.userId}
+                        style={{ fontSize: '0.85rem' }}
+                      >
+                        {grantingCredits === user.userId ? (
+                          <>
+                            <FaSync className={styles.spinning} /> Granting...
+                          </>
+                        ) : (
+                          <>
+                            <FaCoins /> Grant Credits
+                          </>
+                        )}
+                      </button>
+                    </div>
                   </div>
-                </div>
 
-                {/* Set Custom Credits Section */}
-                <div className={styles.creditsSection} style={{ marginTop: '0.5rem' }}>
-                  <label>Set Credits (Exact Amount):</label>
-                  <div className={styles.creditsInput}>
-                    <input
-                      type="number"
-                      min="0"
-                      placeholder="Enter amount"
-                      value={userCustomCredits[user.userId] ?? ''}
-                      onChange={(e) => setUserCustomCredits({ ...userCustomCredits, [user.userId]: e.target.value === '' ? '' : parseInt(e.target.value) || 0 })}
-                      className={styles.creditsInputField}
-                    />
-                    <button 
-                      onClick={() => handleSetUserCredits(user.userId)}
-                      className={styles.btnCredits}
-                      disabled={loading || settingCredits === user.userId}
-                      style={{ background: '#667eea' }}
-                    >
-                      {settingCredits === user.userId ? (
-                        <>
-                          <FaSync className={styles.spinning} /> Setting...
-                        </>
-                      ) : (
-                        <>
-                          <FaCoins /> Set Credits
-                        </>
-                      )}
-                    </button>
+                  {/* Set Custom Credits Section */}
+                  <div className={styles.creditsSection} style={{ marginTop: '0.75rem' }}>
+                    <label style={{ fontSize: '0.9rem' }}>Set Credits (Exact Amount - Updates Token):</label>
+                    <div className={styles.creditsInput}>
+                      <input
+                        type="number"
+                        min="0"
+                        placeholder="Enter amount"
+                        value={userCustomCredits[user.userId] ?? ''}
+                        onChange={(e) => setUserCustomCredits({ ...userCustomCredits, [user.userId]: e.target.value === '' ? '' : parseInt(e.target.value) || 0 })}
+                        className={styles.creditsInputField}
+                        style={{ fontSize: '0.9rem' }}
+                      />
+                      <button 
+                        onClick={() => handleSetUserCredits(user.userId)}
+                        className={styles.btnCredits}
+                        disabled={loading || settingCredits === user.userId}
+                        style={{ background: '#667eea', fontSize: '0.85rem' }}
+                      >
+                        {settingCredits === user.userId ? (
+                          <>
+                            <FaSync className={styles.spinning} /> Setting...
+                          </>
+                        ) : (
+                          <>
+                            <FaCoins /> Set Credits & Update Token
+                          </>
+                        )}
+                      </button>
+                    </div>
+                    <p style={{ fontSize: '0.75rem', opacity: 0.7, marginTop: '0.25rem', fontStyle: 'italic' }}>
+                      This will create/update the user's credit token with the exact amount specified
+                    </p>
                   </div>
                 </div>
 
