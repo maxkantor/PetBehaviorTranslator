@@ -1328,14 +1328,15 @@ app.MapPost("/api/support/contact", async (SupportRequest request) =>
         return Results.BadRequest(new { message = "Message is required" });
     }
     
-    // Check if user is premium for priority handling
+    // Create user entry if it doesn't exist (so they appear in admin dashboard)
     bool isPremium = false;
     if (!string.IsNullOrWhiteSpace(request.UserId))
     {
-        if (usageTracker.ContainsKey(request.UserId))
+        if (!usageTracker.ContainsKey(request.UserId))
         {
-            isPremium = usageTracker[request.UserId].IsPremium;
+            usageTracker[request.UserId] = new UserUsage { UserId = request.UserId };
         }
+        isPremium = usageTracker[request.UserId].IsPremium;
     }
     
     var ticket = new SupportTicket
@@ -1819,6 +1820,12 @@ app.MapPost("/api/credits/get-token", async (GetTokenRequest request) =>
     if (string.IsNullOrWhiteSpace(request.UserId))
     {
         return Results.BadRequest(new { message = "UserId is required" });
+    }
+
+    // Create user entry if it doesn't exist (so they appear in admin dashboard)
+    if (!usageTracker.ContainsKey(request.UserId))
+    {
+        usageTracker[request.UserId] = new UserUsage { UserId = request.UserId };
     }
 
     // Check if user is admin
