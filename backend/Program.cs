@@ -283,6 +283,46 @@ bool IsAdmin(string userId)
     return userId.Trim() == adminUserId.Trim();
 }
 
+// Helper function to validate admin session from token in Authorization header
+async Task<(bool isValid, string? userId)> ValidateAdminSessionAsync(HttpContext context)
+{
+    // Try to get token from Authorization header
+    var authHeader = context.Request.Headers["Authorization"].ToString();
+    if (string.IsNullOrWhiteSpace(authHeader))
+    {
+        // Also try X-Admin-Session-Token header
+        authHeader = context.Request.Headers["X-Admin-Session-Token"].ToString();
+    }
+    
+    // Remove "Bearer " prefix if present
+    var token = authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase) 
+        ? authHeader.Substring(7).Trim() 
+        : authHeader.Trim();
+    
+    if (string.IsNullOrWhiteSpace(token))
+    {
+        return (false, null);
+    }
+    
+    // Validate token
+    var payload = tokenService.ValidateToken(token);
+    if (payload == null)
+    {
+        Console.WriteLine("[ADMIN SESSION] Invalid or expired token");
+        return (false, null);
+    }
+    
+    // Check if token has admin flag
+    if (!payload.IsAdmin)
+    {
+        Console.WriteLine($"[ADMIN SESSION] Token does not have admin flag for user: {payload.UserId}");
+        return (false, null);
+    }
+    
+    Console.WriteLine($"[ADMIN SESSION] Valid admin session for user: {payload.UserId}");
+    return (true, payload.UserId);
+}
+
 // Helper function to log activity
 void LogActivity(string userId, string action, string details = "")
 {
@@ -450,12 +490,24 @@ app.MapGet("/api/admin/check", (HttpContext context) =>
 .WithOpenApi();
 
 // Admin endpoint - Get all users (for admin dashboard) - ADMIN ONLY
-app.MapGet("/api/admin/users", (HttpContext context) =>
+app.MapGet("/api/admin/users", async (HttpContext context) =>
 {
-    var userId = context.Request.Query["adminUserId"].ToString();
-    if (!IsAdmin(userId))
+    // First try to validate admin session from token
+    var (isValidSession, sessionUserId) = await ValidateAdminSessionAsync(context);
+    
+    string userId;
+    if (isValidSession && !string.IsNullOrWhiteSpace(sessionUserId))
     {
-        return Results.Unauthorized();
+        userId = sessionUserId;
+    }
+    else
+    {
+        // Fallback to query parameter and check IsAdmin
+        userId = context.Request.Query["adminUserId"].ToString();
+        if (!IsAdmin(userId))
+        {
+            return Results.Unauthorized();
+        }
     }
     
     var users = usageTracker.Values.Select(u => new
@@ -475,12 +527,24 @@ app.MapGet("/api/admin/users", (HttpContext context) =>
 .WithOpenApi();
 
 // Admin endpoint - Get activity log - ADMIN ONLY
-app.MapGet("/api/admin/activities", (HttpContext context) =>
+app.MapGet("/api/admin/activities", async (HttpContext context) =>
 {
-    var userId = context.Request.Query["adminUserId"].ToString();
-    if (!IsAdmin(userId))
+    // First try to validate admin session from token
+    var (isValidSession, sessionUserId) = await ValidateAdminSessionAsync(context);
+    
+    string userId;
+    if (isValidSession && !string.IsNullOrWhiteSpace(sessionUserId))
     {
-        return Results.Unauthorized();
+        userId = sessionUserId;
+    }
+    else
+    {
+        // Fallback to query parameter and check IsAdmin
+        userId = context.Request.Query["adminUserId"].ToString();
+        if (!IsAdmin(userId))
+        {
+            return Results.Unauthorized();
+        }
     }
     
     var activities = activityLog
@@ -1334,12 +1398,24 @@ app.MapGet("/api/support/tickets/{userId}", (string userId) =>
 .WithOpenApi();
 
 // Get all support tickets (admin only)
-app.MapGet("/api/support/tickets", (HttpContext context) =>
+app.MapGet("/api/support/tickets", async (HttpContext context) =>
 {
-    var adminUserId = context.Request.Query["adminUserId"].ToString();
-    if (!IsAdmin(adminUserId))
+    // First try to validate admin session from token
+    var (isValidSession, sessionUserId) = await ValidateAdminSessionAsync(context);
+    
+    string adminUserId;
+    if (isValidSession && !string.IsNullOrWhiteSpace(sessionUserId))
     {
-        return Results.Unauthorized();
+        adminUserId = sessionUserId;
+    }
+    else
+    {
+        // Fallback to query parameter and check IsAdmin
+        adminUserId = context.Request.Query["adminUserId"].ToString();
+        if (!IsAdmin(adminUserId))
+        {
+            return Results.Unauthorized();
+        }
     }
     
     var allTickets = supportTickets
