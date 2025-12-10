@@ -3,6 +3,8 @@ import { useSearchParams, Link, useLocation } from 'react-router-dom'
 import { FaPaw, FaCheckCircle, FaCrown, FaCoins } from 'react-icons/fa'
 import axios from 'axios'
 import { getCreditToken, completeCreditPurchase } from '../services/creditService'
+import { trackCreditPurchase, trackPremiumPurchase } from '../services/analyticsService'
+import { getUserId } from '../services/premiumService'
 import styles from './PaymentSuccess.module.css'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001'
@@ -15,9 +17,19 @@ function PaymentSuccess() {
   const [message, setMessage] = useState('')
   const [planDetails, setPlanDetails] = useState(null)
   const [isCreditPurchase, setIsCreditPurchase] = useState(false)
+  const [tiers, setTiers] = useState([])
 
   useEffect(() => {
     const completePayment = async () => {
+      // Load credit tiers for tracking
+      try {
+        const { getCreditTiers } = await import('../services/creditService')
+        const tiersResponse = await getCreditTiers()
+        setTiers(tiersResponse.tiers || [])
+      } catch (error) {
+        console.error('Failed to load tiers for tracking:', error)
+      }
+      
       // Check if this is a credit purchase (from /credits/success)
       const isCredit = location.pathname.includes('/credits/success')
       setIsCreditPurchase(isCredit)
@@ -79,6 +91,18 @@ function PaymentSuccess() {
               creditsAdded: response.data.creditsAdded,
               creditsRemaining: response.data.creditsRemaining
             })
+            
+            // Track credit purchase
+            const userId = getUserId()
+            // Get tier info from response or search params
+            const tierInfo = tiers.find(t => t.id === tierId) || {}
+            trackCreditPurchase(
+              userId,
+              tierId,
+              response.data.tierName || tierInfo.name || 'Unknown',
+              tierInfo.price || 0,
+              response.data.creditsAdded || tierInfo.credits || 0
+            )
             
             // Refresh credit balance display
             if (window.refreshCreditBalance) {
@@ -173,6 +197,20 @@ function PaymentSuccess() {
               planId: response.data.planId,
               expiresAt: response.data.expiresAt
             })
+            
+            // Track premium purchase
+            const userId = getUserId()
+            const planPrices = {
+              monthly: 9.99,
+              yearly: 99.99,
+              lifetime: 199.99
+            }
+            trackPremiumPurchase(
+              userId,
+              planId,
+              getPlanName(planId),
+              planPrices[planId] || 0
+            )
           }
         } catch (error) {
           console.error('Payment completion error:', error)

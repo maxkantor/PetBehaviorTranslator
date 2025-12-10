@@ -5,6 +5,7 @@ import axios from 'axios'
 import { getUserId } from '../services/premiumService'
 import { getOrCreateToken, useCredit, getCreditBalance, getCreditToken } from '../services/creditService'
 import { checkAdmin } from '../services/adminService'
+import { trackTranslation, trackOutOfCredits, trackCreditLow, identifyUser } from '../services/analyticsService'
 import CreditBalanceIndicator from '../components/CreditBalanceIndicator'
 import styles from './Home.module.css'
 
@@ -62,6 +63,9 @@ function Home() {
         // Load balance
         const balance = await getCreditBalance()
         setCreditBalance(balance)
+        
+        // Identify user for analytics
+        identifyUser(userId)
       } catch (error) {
         console.error('Error loading credit balance:', error)
       } finally {
@@ -94,6 +98,7 @@ function Home() {
         
         if (!hasFreeSearches && !hasCredits) {
           setError('No free searches or credits remaining. Please purchase credits to continue.')
+          trackOutOfCredits(getUserId())
           setLoading(false)
           return
         }
@@ -135,9 +140,19 @@ function Home() {
       setError(null)
       setRetryAfterSeconds(null)
       
+      // Track translation event
+      const userId = getUserId()
+      const isFreeSearch = creditBalance.freeSearchesRemaining > 0
+      trackTranslation(userId, behavior.trim().length, creditBalance.creditsRemaining > 0, isFreeSearch)
+      
       // Refresh balance after successful translation
       const balance = await getCreditBalance()
       setCreditBalance(balance)
+      
+      // Track if credits are getting low (conversion opportunity)
+      if (balance.creditsRemaining > 0 && balance.creditsRemaining <= 5) {
+        trackCreditLow(userId, balance.creditsRemaining)
+      }
       
       // Refresh the CreditBalanceIndicator component
       if (window.refreshCreditBalance) {
