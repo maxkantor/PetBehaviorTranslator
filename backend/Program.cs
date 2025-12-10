@@ -684,12 +684,24 @@ app.MapPost("/api/admin/set-premium-plan/{userId}", (string userId, PremiumPlanR
 .WithOpenApi();
 
 // Admin endpoint - Grant credits to a user - ADMIN ONLY
-app.MapPost("/api/admin/grant-credits/{userId}", (string userId, GrantCreditsRequest request, HttpContext context) =>
+app.MapPost("/api/admin/grant-credits/{userId}", async (string userId, GrantCreditsRequest request, HttpContext context) =>
 {
-    var adminUserId = context.Request.Query["adminUserId"].ToString();
-    if (!IsAdmin(adminUserId))
+    // First try to validate admin session from token
+    var (isValidSession, sessionUserId) = await ValidateAdminSessionAsync(context);
+    
+    string adminUserId;
+    if (isValidSession && !string.IsNullOrWhiteSpace(sessionUserId))
     {
-        return Results.Unauthorized();
+        adminUserId = sessionUserId;
+    }
+    else
+    {
+        // Fallback to query parameter and check IsAdmin
+        adminUserId = context.Request.Query["adminUserId"].ToString();
+        if (!IsAdmin(adminUserId))
+        {
+            return Results.Unauthorized();
+        }
     }
     
     if (string.IsNullOrWhiteSpace(userId))
@@ -1136,13 +1148,26 @@ app.MapGet("/api/admin/user-credits/{userId}", async (string userId, HttpContext
 // POST /admin/set-user-credits/{userId} - Set specific user's credits to exact amount (ADMIN ONLY)
 app.MapPost("/api/admin/set-user-credits/{userId}", async (string userId, SetUserCreditsRequest request, HttpContext context) =>
 {
-    var adminUserId = context.Request.Query["adminUserId"].ToString();
-    var adminEmail = context.Request.Query["email"].ToString();
+    // First try to validate admin session from token
+    var (isValidSession, sessionUserId) = await ValidateAdminSessionAsync(context);
     
-    var isAdmin = await IsAdminAsync(adminUserId, adminEmail);
-    if (!isAdmin)
+    string adminUserId;
+    string adminEmail;
+    if (isValidSession && !string.IsNullOrWhiteSpace(sessionUserId))
     {
-        return Results.Json(new { message = "Admin access required" }, statusCode: 401);
+        adminUserId = sessionUserId;
+        adminEmail = context.Request.Query["email"].ToString(); // Still get email from query if needed
+    }
+    else
+    {
+        // Fallback to query parameter and check IsAdmin
+        adminUserId = context.Request.Query["adminUserId"].ToString();
+        adminEmail = context.Request.Query["email"].ToString();
+        var isAdmin = await IsAdminAsync(adminUserId, adminEmail);
+        if (!isAdmin)
+        {
+            return Results.Json(new { message = "Admin access required" }, statusCode: 401);
+        }
     }
     
     if (string.IsNullOrWhiteSpace(userId))
@@ -1443,10 +1468,22 @@ app.MapGet("/api/support/tickets", async (HttpContext context) =>
 // Reply to a support ticket (admin only)
 app.MapPost("/api/support/reply", async (SupportReplyRequest request, HttpContext context) =>
 {
-    var adminUserId = context.Request.Query["adminUserId"].ToString();
-    if (!IsAdmin(adminUserId))
+    // First try to validate admin session from token
+    var (isValidSession, sessionUserId) = await ValidateAdminSessionAsync(context);
+    
+    string adminUserId;
+    if (isValidSession && !string.IsNullOrWhiteSpace(sessionUserId))
     {
-        return Results.Unauthorized();
+        adminUserId = sessionUserId;
+    }
+    else
+    {
+        // Fallback to query parameter and check IsAdmin
+        adminUserId = context.Request.Query["adminUserId"].ToString();
+        if (!IsAdmin(adminUserId))
+        {
+            return Results.Unauthorized();
+        }
     }
     
     if (string.IsNullOrWhiteSpace(request.TicketId))
