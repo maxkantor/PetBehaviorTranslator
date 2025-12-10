@@ -97,6 +97,10 @@ var stripeSecretKey = await secretsService.GetSecretOrEnvAsync("STRIPE_SECRET_KE
 var stripeWebhookSecret = await secretsService.GetSecretOrEnvAsync("STRIPE_WEBHOOK_SECRET", "STRIPE_WEBHOOK_SECRET", string.Empty);
 var frontendUrl = await secretsService.GetSecretOrEnvAsync("FRONTEND_URL", "FRONTEND_URL", "https://www.petbehaviortranslator.com");
 
+// Get Analytics configuration
+var gaMeasurementId = await secretsService.GetSecretOrEnvAsync("GA_MEASUREMENT_ID", "GA_MEASUREMENT_ID", string.Empty);
+var mixpanelToken = await secretsService.GetSecretOrEnvAsync("MIXPANEL_TOKEN", "MIXPANEL_TOKEN", string.Empty);
+
 // Get Admin configuration
 var adminUserId = await secretsService.GetSecretOrEnvAsync("ADMIN_USER_ID", "ADMIN_USER_ID", string.Empty);
 
@@ -2266,7 +2270,7 @@ app.MapGet("/api/credits/tiers", async () =>
     var config = await adminConfigService.GetConfigAsync();
     var effectiveTiers = config.Tiers.Count > 0 ? config.Tiers : creditTiers;
     var effectiveFreeLimit = config.FreeSearchLimit > 0 ? config.FreeSearchLimit : freeSearchLimit;
-    
+
     return Results.Ok(new
     {
         tiers = effectiveTiers,
@@ -2274,6 +2278,18 @@ app.MapGet("/api/credits/tiers", async () =>
     });
 })
 .WithName("GetCreditTiers")
+.WithOpenApi();
+
+// GET /api/config/analytics - Get analytics configuration for frontend
+app.MapGet("/api/config/analytics", () =>
+{
+    return Results.Ok(new
+    {
+        gaMeasurementId = gaMeasurementId,
+        mixpanelToken = mixpanelToken
+    });
+})
+.WithName("GetAnalyticsConfig")
 .WithOpenApi();
 
 // 6. POST /credits/validate - Validate token and return current state
