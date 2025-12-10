@@ -97,7 +97,19 @@ function Admin() {
       console.error('Error loading users:', error)
       console.error('Error response:', error.response?.data)
       if (error.response?.status === 401) {
-        showMessage('Access denied. You are not an admin. Set ADMIN_USER_ID environment variable to your user ID.', 'error')
+        const userId = getUserId()
+        const sessionToken = localStorage.getItem('adminSessionToken')
+        let errorMsg = 'Access denied. Admin authentication failed.\n\n'
+        errorMsg += `Your User ID: ${userId}\n\n`
+        if (!sessionToken) {
+          errorMsg += 'No admin session found. Please log in via the admin login page.'
+        } else {
+          errorMsg += 'Your user ID or email may not be configured as an admin.\n'
+          errorMsg += 'Options:\n'
+          errorMsg += '1. Set ADMIN_USER_ID environment variable to your user ID\n'
+          errorMsg += '2. Add your email to the admin email list in the configuration'
+        }
+        showMessage(errorMsg, 'error')
         setIsAdmin(false)
       } else {
         showMessage(`Failed to load users: ${error.response?.data?.message || error.message}`, 'error')
@@ -414,15 +426,23 @@ function Admin() {
                 value={selectedUserForCredits || ''}
                 onChange={(e) => setSelectedUserForCredits(e.target.value)}
                 className={styles.planSelect}
-                style={{ width: '100%', padding: '0.75rem', fontSize: '0.9rem' }}
+                style={{ width: '100%', padding: '0.75rem', fontSize: '0.9rem', cursor: 'pointer' }}
+                disabled={loading}
               >
-                <option value="">-- Select a user --</option>
+                <option value="">
+                  {loading ? 'Loading users...' : users.length === 0 ? 'No users available - Click "Refresh Users" below' : '-- Select a user --'}
+                </option>
                 {users.map(user => (
                   <option key={user.userId} value={user.userId}>
                     {user.userId} {user.email ? `(${user.email})` : ''} {user.isPremium ? '⭐ Premium' : ''}
                   </option>
                 ))}
               </select>
+              {users.length === 0 && !loading && (
+                <p style={{ fontSize: '0.75rem', opacity: 0.7, marginTop: '0.5rem', fontStyle: 'italic' }}>
+                  No users found. Make sure users have used the app, then click "Refresh Users" in the Quick Actions section below.
+                </p>
+              )}
             </div>
 
             {/* Quick Set Buttons */}

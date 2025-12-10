@@ -17,7 +17,19 @@ const getAdminParams = () => {
   if (email) {
     params.email = email
   }
-  return { params }
+  
+  // Include session token in headers if available
+  const sessionToken = localStorage.getItem('adminSessionToken')
+  const config = { params }
+  
+  if (sessionToken) {
+    config.headers = {
+      'Authorization': `Bearer ${sessionToken}`,
+      'X-Admin-Session-Token': sessionToken
+    }
+  }
+  
+  return config
 }
 
 // Check if current user is admin
