@@ -323,6 +323,68 @@ async Task<(bool isValid, string? userId)> ValidateAdminSessionAsync(HttpContext
     return (true, payload.UserId);
 }
 
+// Helper function to validate if prompt is related to pet behavior
+bool IsPetBehaviorRelated(string behavior)
+{
+    if (string.IsNullOrWhiteSpace(behavior))
+    {
+        return false;
+    }
+    
+    var lowerBehavior = behavior.ToLowerInvariant();
+    
+    // Pet-related keywords
+    var petKeywords = new[]
+    {
+        "pet", "pets", "dog", "dogs", "puppy", "puppies", "cat", "cats", "kitten", "kittens",
+        "bird", "birds", "parrot", "rabbit", "rabbits", "hamster", "hamsters", "guinea pig",
+        "ferret", "ferrets", "fish", "turtle", "turtles", "lizard", "lizards", "snake", "snakes",
+        "barking", "meowing", "whining", "howling", "purring", "hissing", "growling",
+        "biting", "scratching", "chewing", "digging", "jumping", "running", "playing",
+        "aggressive", "aggression", "anxiety", "fearful", "scared", "nervous",
+        "litter box", "potty", "house training", "housebreaking", "toilet",
+        "eating", "feeding", "food", "treat", "treats", "hungry", "appetite",
+        "sleeping", "sleep", "rest", "energy", "hyperactive", "calm",
+        "training", "obedience", "commands", "sit", "stay", "come", "heel",
+        "socialization", "social", "interaction", "behavior", "behaviors",
+        "animal", "animals", "companion", "companions"
+    };
+    
+    // Check if behavior contains pet-related keywords
+    foreach (var keyword in petKeywords)
+    {
+        if (lowerBehavior.Contains(keyword))
+        {
+            return true;
+        }
+    }
+    
+    // Check for common non-pet topics to reject
+    var nonPetKeywords = new[]
+    {
+        "how to code", "programming", "software", "website", "app development",
+        "cooking recipe", "recipe for", "how to cook", "baking",
+        "medical advice", "health condition", "diagnosis", "treatment",
+        "legal advice", "law", "lawsuit", "attorney",
+        "financial advice", "investment", "stock", "trading", "cryptocurrency",
+        "homework", "assignment", "essay", "thesis", "research paper",
+        "translate this text", "what does this mean", "explain this code",
+        "write a story", "write a poem", "creative writing"
+    };
+    
+    foreach (var keyword in nonPetKeywords)
+    {
+        if (lowerBehavior.Contains(keyword))
+        {
+            return false;
+        }
+    }
+    
+    // If no clear pet keywords found, be lenient but log for review
+    // Return true by default to avoid false positives, but could be made stricter
+    return true;
+}
+
 // Helper function to log activity
 void LogActivity(string userId, string action, string details = "")
 {
@@ -2256,6 +2318,16 @@ app.MapPost("/api/translate", async (TranslateRequest request) =>
         if (string.IsNullOrWhiteSpace(request.Behavior))
         {
             return Results.BadRequest(new { message = "Behavior description is required" });
+        }
+        
+        // Validate that the prompt is related to pet behavior
+        if (!IsPetBehaviorRelated(request.Behavior))
+        {
+            return Results.BadRequest(new 
+            { 
+                message = "This service is designed for pet behavior questions only. Please ask about your pet's behavior, training, or care.",
+                errorCode = "NOT_PET_RELATED"
+            });
         }
         
         // Check credit token and admin bypass
