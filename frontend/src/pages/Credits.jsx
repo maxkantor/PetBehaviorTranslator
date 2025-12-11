@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { FaCoins, FaCrown, FaCopyright, FaHeart, FaCheck, FaSpinner, FaGift } from 'react-icons/fa'
 import { getCreditTiers, purchaseCredits, getCreditToken } from '../services/creditService'
+import SEOHead from '../components/SEOHead'
 import styles from './Credits.module.css'
 
 function Credits() {
@@ -71,7 +72,13 @@ function Credits() {
   }
 
   return (
-    <div className={styles.container}>
+    <>
+      <SEOHead 
+        title="Buy Credits - Pet Behavior Translator"
+        description="Purchase credit packages to continue using our AI pet behavior translator. Affordable pricing with multiple tier options for all your pet behavior questions."
+        keywords="buy pet translator credits, pet behavior credits, purchase pet translator"
+      />
+      <div className={styles.container}>
       {/* Decorative Pet Images */}
       <img 
         src="https://images.unsplash.com/photo-1548199973-03cce0bbc87b?w=300&h=300&fit=crop&crop=face" 
@@ -204,6 +211,7 @@ function Credits() {
         </footer>
       </div>
     </div>
+    </>
   )
 }
 

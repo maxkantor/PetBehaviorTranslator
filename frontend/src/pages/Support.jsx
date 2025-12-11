@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { FaPaw, FaEnvelope, FaHeadset, FaCrown, FaCheckCircle } from 'react-icons/fa'
 import { getUserId, isPremium } from '../services/premiumService'
 import axios from 'axios'
+import SEOHead from '../components/SEOHead'
 import styles from './Support.module.css'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001'
@@ -88,33 +89,46 @@ function Support() {
 
   if (submitted) {
     return (
-      <div className={styles.container}>
-        <div className={styles.content}>
-          <div className={styles.successContainer}>
-            <FaCheckCircle className={styles.successIcon} />
-            <h1 className={styles.title}>Support Request Submitted!</h1>
-            <p className={styles.subtitle}>
-              {userIsPremium 
-                ? "Priority support ticket created! We'll respond within 24 hours."
-                : "Support ticket created! We'll respond within 48 hours."}
-            </p>
-            {ticketId && (
-              <p className={styles.ticketId}>
-                Ticket ID: <strong>{ticketId}</strong>
+      <>
+        <SEOHead 
+          title="Support Request Submitted - Pet Behavior Translator"
+          description="Your support request has been submitted successfully. We'll get back to you soon!"
+          keywords="pet translator support, pet behavior help"
+        />
+        <div className={styles.container}>
+          <div className={styles.content}>
+            <div className={styles.successContainer}>
+              <FaCheckCircle className={styles.successIcon} />
+              <h1 className={styles.title}>Support Request Submitted!</h1>
+              <p className={styles.subtitle}>
+                {userIsPremium 
+                  ? "Priority support ticket created! We'll respond within 24 hours."
+                  : "Support ticket created! We'll respond within 48 hours."}
               </p>
-            )}
-            <Link to="/" className={styles.backButton}>
-              <FaPaw />
-              Back to Translator
-            </Link>
+              {ticketId && (
+                <p className={styles.ticketId}>
+                  Ticket ID: <strong>{ticketId}</strong>
+                </p>
+              )}
+              <Link to="/" className={styles.backButton}>
+                <FaPaw />
+                Back to Translator
+              </Link>
+            </div>
           </div>
         </div>
-      </div>
+      </>
     )
   }
 
   return (
-    <div className={styles.container}>
+    <>
+      <SEOHead 
+        title="Support & Contact - Pet Behavior Translator"
+        description="Get help with the Pet Behavior Translator. Contact our support team for questions, feedback, or technical assistance."
+        keywords="pet translator support, pet behavior help, contact pet translator"
+      />
+      <div className={styles.container}>
       <div className={styles.content}>
         <div className={styles.header}>
           <FaHeadset className={styles.headerIcon} />
@@ -229,6 +243,7 @@ function Support() {
         </Link>
       </div>
     </div>
+    </>
   )
 }
 

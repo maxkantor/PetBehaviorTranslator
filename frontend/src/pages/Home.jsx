@@ -7,6 +7,7 @@ import { getOrCreateToken, useCredit, getCreditBalance, getCreditToken } from '.
 import { checkAdmin } from '../services/adminService'
 import { trackTranslation, trackOutOfCredits, trackCreditLow, identifyUser } from '../services/analyticsService'
 import CreditBalanceIndicator from '../components/CreditBalanceIndicator'
+import SEOHead from '../components/SEOHead'
 import styles from './Home.module.css'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001'
@@ -267,7 +268,13 @@ function Home() {
   }
 
   return (
-    <div className={styles.container}>
+    <>
+      <SEOHead 
+        title="AI Pet Behavior Translator 🐾 - Understand Your Pet's Actions"
+        description="AI-powered pet behavior translator that helps you understand your pet's actions and provides actionable solutions. Get instant advice for dog and cat behavior issues."
+        keywords="pet behavior, dog behavior, cat behavior, pet translator, AI pet advice, pet training"
+      />
+      <div className={styles.container}>
       {/* Decorative Pet Images - Specific Breeds */}
       {/* These use SVG placeholders. Replace with actual images in /public/images/ */}
       {/* Old English Sheepdog Puppy */}
@@ -619,6 +626,7 @@ function Home() {
         </div>
       </footer>
     </div>
+    </>
   )
 }
 

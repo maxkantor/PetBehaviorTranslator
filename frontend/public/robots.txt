@@ -1,0 +1,10 @@
+User-agent: *
+Allow: /
+
+# Sitemap
+Sitemap: https://www.petbehaviortranslator.com/sitemap.xml
+
+# Disallow admin pages
+Disallow: /admin
+Disallow: /admin/login
+

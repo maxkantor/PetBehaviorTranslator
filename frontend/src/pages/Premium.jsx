@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { FaPaw, FaCrown, FaCopyright, FaHeart, FaCheck, FaSpinner } from 'react-icons/fa'
 import axios from 'axios'
 import { getUserId } from '../services/premiumService'
+import SEOHead from '../components/SEOHead'
 import styles from './Premium.module.css'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001'
@@ -67,7 +68,13 @@ function Premium() {
   }
 
   return (
-    <div className={styles.container}>
+    <>
+      <SEOHead 
+        title="Premium Plans - Pet Behavior Translator"
+        description="Upgrade to premium for unlimited pet behavior translations, priority support, and advanced features. Choose from monthly, yearly, or lifetime plans."
+        keywords="premium pet translator, pet behavior premium, unlimited pet translations"
+      />
+      <div className={styles.container}>
       {/* Decorative Pet Images */}
       <img 
         src="https://images.unsplash.com/photo-1548199973-03cce0bbc87b?w=300&h=300&fit=crop&crop=face" 
@@ -188,6 +195,7 @@ function Premium() {
         </footer>
       </div>
     </div>
+    </>
   )
 }
 
