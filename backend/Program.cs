@@ -373,7 +373,8 @@ bool IsPetBehaviorRelated(string behavior)
         "financial advice", "investment", "stock", "trading", "cryptocurrency",
         "homework", "assignment", "essay", "thesis", "research paper",
         "translate this text", "what does this mean", "explain this code",
-        "write a story", "write a poem", "creative writing"
+        "write a story", "write a poem", "creative writing",
+        "hello", "hi", "hey", "greetings", "good morning", "good afternoon", "good evening"
     };
     
     foreach (var keyword in nonPetKeywords)
@@ -384,9 +385,20 @@ bool IsPetBehaviorRelated(string behavior)
         }
     }
     
-    // If no clear pet keywords found, be lenient but log for review
-    // Return true by default to avoid false positives, but could be made stricter
-    return true;
+    // If no clear pet keywords found, reject it
+    // This prevents non-pet queries from being processed
+    // Short inputs (less than 3 words) without pet keywords are likely not pet behaviors
+    var words = lowerBehavior.Split(new[] { ' ', '\t', '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
+    if (words.Length < 3)
+    {
+        // Very short inputs without pet keywords are probably not pet behaviors
+        return false;
+    }
+    
+    // For longer inputs, be slightly more lenient but still require some pet context
+    // This allows for natural language descriptions that might not have explicit pet keywords
+    // but are clearly about pet behavior (e.g., "keeps jumping on the couch")
+    return false; // Stricter: require explicit pet keywords
 }
 
 // Helper function to log activity
