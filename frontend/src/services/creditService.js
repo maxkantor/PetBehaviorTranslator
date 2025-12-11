@@ -70,6 +70,24 @@ export const useCredit = async () => {
 
     // Check if we got an error (NO_CREDITS)
     if (response.data.error === 'NO_CREDITS') {
+      // Before returning error, validate the token to see if it's out of sync
+      const validation = await validateToken(token)
+      if (validation && validation.valid) {
+        // Token is valid but says no credits - return the error with current balance
+        return {
+          success: false,
+          error: 'NO_CREDITS',
+          message: response.data.message,
+          freeSearchesRemaining: validation.freeSearchesRemaining || 0,
+          creditsRemaining: validation.creditsRemaining || 0,
+          freeSearchesUsed: validation.freeSearchesUsed || 0,
+          freeSearchLimit: validation.freeSearchLimit || 5,
+          isAdmin: validation.isAdmin || false,
+          isAdminOverride: validation.isAdminOverride || false,
+          ...response.data
+        }
+      }
+      
       return {
         success: false,
         error: 'NO_CREDITS',

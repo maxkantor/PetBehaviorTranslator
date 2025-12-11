@@ -92,9 +92,13 @@ function Home() {
       const shouldBypassCredits = creditBalance.isAdminOverride || (creditBalance.isAdmin && creditBalance.creditsRemaining > 0)
       
       if (!shouldBypassCredits) {
-        // Check if user has credits available (non-admins only)
-        const hasFreeSearches = creditBalance.freeSearchesRemaining > 0
-        const hasCredits = creditBalance.creditsRemaining > 0
+        // Refresh balance first to ensure we have the latest data
+        const currentBalance = await getCreditBalance()
+        setCreditBalance(currentBalance)
+        
+        // Check if user has credits available (non-admins only) - use fresh balance
+        const hasFreeSearches = currentBalance.freeSearchesRemaining > 0
+        const hasCredits = currentBalance.creditsRemaining > 0
         
         if (!hasFreeSearches && !hasCredits) {
           setError('No free searches or credits remaining. Please purchase credits to continue.')
@@ -107,23 +111,69 @@ function Home() {
         const creditResult = await useCredit()
         
         if (!creditResult.success || creditResult.error === 'NO_CREDITS') {
-          setError(creditResult.message || 'No credits available. Please purchase credits to continue.')
-          // Refresh balance
-          const balance = await getCreditBalance()
-          setCreditBalance(balance)
-          setLoading(false)
-          return
+          // Double-check balance in case token was out of sync
+          const refreshedBalance = await getCreditBalance()
+          
+          // Check if the error response includes balance info that shows credits available
+          const errorHasCredits = (creditResult.creditsRemaining > 0) || (creditResult.freeSearchesRemaining > 0)
+          const refreshedHasCredits = (refreshedBalance.creditsRemaining > 0) || (refreshedBalance.freeSearchesRemaining > 0)
+          
+          if (errorHasCredits || refreshedHasCredits) {
+            // Balance shows credits available, but useCredit failed - token might be out of sync
+            // Try to get a fresh token and retry
+            console.warn('Credit use failed but balance shows credits available, refreshing token and retrying...')
+            try {
+              const userId = getUserId()
+              const freshTokenData = await getOrCreateToken(userId)
+              if (freshTokenData && (freshTokenData.creditsRemaining > 0 || freshTokenData.freeSearchesRemaining > 0)) {
+                // Got fresh token with credits, retry
+                const retryResult = await useCredit()
+                if (!retryResult.success || retryResult.error === 'NO_CREDITS') {
+                  setError(retryResult.message || 'No credits available. Please purchase credits to continue.')
+                  setCreditBalance(refreshedBalance)
+                  setLoading(false)
+                  return
+                }
+                // Retry succeeded, use the result
+                setCreditBalance({
+                  freeSearchesRemaining: retryResult.freeSearchLimit - retryResult.freeSearchesUsed,
+                  creditsRemaining: retryResult.creditsRemaining || 0,
+                  freeSearchesUsed: retryResult.freeSearchesUsed || 0,
+                  freeSearchLimit: retryResult.freeSearchLimit || 5,
+                  isAdmin: retryResult.isAdmin || false,
+                  isAdminOverride: retryResult.isAdminOverride || false
+                })
+              } else {
+                // Fresh token also shows no credits
+                setError(creditResult.message || 'No credits available. Please purchase credits to continue.')
+                setCreditBalance(refreshedBalance)
+                setLoading(false)
+                return
+              }
+            } catch (refreshError) {
+              console.error('Error refreshing token:', refreshError)
+              setError(creditResult.message || 'No credits available. Please purchase credits to continue.')
+              setCreditBalance(refreshedBalance)
+              setLoading(false)
+              return
+            }
+          } else {
+            setError(creditResult.message || 'No credits available. Please purchase credits to continue.')
+            setCreditBalance(refreshedBalance)
+            setLoading(false)
+            return
+          }
+        } else {
+          // Update balance from credit result (non-admins only)
+          setCreditBalance({
+            freeSearchesRemaining: creditResult.freeSearchLimit - creditResult.freeSearchesUsed,
+            creditsRemaining: creditResult.creditsRemaining || 0,
+            freeSearchesUsed: creditResult.freeSearchesUsed || 0,
+            freeSearchLimit: creditResult.freeSearchLimit || 5,
+            isAdmin: creditResult.isAdmin || false,
+            isAdminOverride: creditResult.isAdminOverride || false
+          })
         }
-
-        // Update balance from credit result (non-admins only)
-        setCreditBalance({
-          freeSearchesRemaining: creditResult.freeSearchLimit - creditResult.freeSearchesUsed,
-          creditsRemaining: creditResult.creditsRemaining || 0,
-          freeSearchesUsed: creditResult.freeSearchesUsed || 0,
-          freeSearchLimit: creditResult.freeSearchLimit || 5,
-          isAdmin: creditResult.isAdmin || false,
-          isAdminOverride: creditResult.isAdminOverride || false
-        })
       }
 
       // Get credit token for translation request (backend will check admin bypass)
