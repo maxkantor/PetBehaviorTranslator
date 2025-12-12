@@ -194,16 +194,26 @@ export const adminLogout = () => {
 // POST /admin/connect - Connect as admin and get admin token
 export const adminConnect = async () => {
   try {
-    const userId = getUserId()
     const email = getUserEmail()
+    if (!email) {
+      throw new Error('Email is required for admin access. Please set your email first.')
+    }
+    
+    // For admin, we don't need the regular userId - backend will generate consistent one from email
     const response = await axios.post(`${API_URL}/api/admin/connect`, {
-      userId,
-      email
+      userId: null, // Not required for admin
+      email: email
     })
     
     // Store admin token if provided
     if (response.data.adminToken) {
       localStorage.setItem('adminToken', response.data.adminToken)
+    }
+    
+    // Store the consistent admin user ID returned from backend
+    if (response.data.adminUserId) {
+      localStorage.setItem('petBehaviorUserId', response.data.adminUserId)
+      localStorage.setItem('adminUserId', response.data.adminUserId)
     }
     
     return response.data
