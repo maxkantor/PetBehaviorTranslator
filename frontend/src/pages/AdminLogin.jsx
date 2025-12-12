@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { FaUserShield, FaLock, FaUser, FaSpinner } from 'react-icons/fa'
-import { adminLogin } from '../services/adminService'
+import { adminLogin, adminConnect } from '../services/adminService'
 import styles from './AdminLogin.module.css'
 
 function AdminLogin() {
@@ -24,6 +24,22 @@ function AdminLogin() {
           localStorage.setItem('adminSessionToken', result.sessionToken)
           localStorage.setItem('adminSessionExpiresAt', result.expiresAt?.toString() || '')
         }
+        
+        // After successful login, also connect as admin to get proper admin user ID
+        // This requires email to be set - check if we have it
+        const email = localStorage.getItem('userEmail')
+        if (email) {
+          try {
+            await adminConnect()
+          } catch (connectError) {
+            console.warn('Admin connect failed, but login succeeded:', connectError)
+            // Continue anyway - session token should be enough for basic access
+          }
+        } else {
+          // If no email, show a warning but allow login to proceed
+          console.warn('No email found in localStorage. Admin features may be limited. Please set your email.')
+        }
+        
         // Redirect to admin dashboard
         navigate('/admin', { replace: true })
       } else {
@@ -31,7 +47,8 @@ function AdminLogin() {
       }
     } catch (err) {
       console.error('Login error:', err)
-      setError(err.response?.data?.message || 'Invalid username or password')
+      const errorMessage = err.response?.data?.message || err.message || 'Invalid username or password'
+      setError(errorMessage)
     } finally {
       setLoading(false)
     }
@@ -113,3 +130,4 @@ function AdminLogin() {
 }
 
 export default AdminLogin
+

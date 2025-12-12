@@ -47,18 +47,31 @@ function Admin() {
       setLoading(true)
       try {
         // User is already authenticated via session (ProtectedAdminRoute handles that)
-        // Just load dashboard data
+        // Try to connect as admin if we have email (to get proper admin user ID)
+        const email = localStorage.getItem('userEmail')
+        if (email) {
+          try {
+            await adminConnect()
+          } catch (connectError) {
+            console.warn('Admin connect failed during initialization:', connectError)
+            // Continue anyway - session token should be enough
+          }
+        }
+        
+        // Load dashboard data
         await loadDashboard()
         await loadUsers()
         await loadSupportTickets()
         setIsAdmin(true) // If they got here, they're authenticated
       } catch (error) {
         console.error('Admin initialization error:', error)
+        console.error('Error details:', error.response?.data)
         if (error.response?.status === 401) {
           showMessage('Session expired. Please log in again.', 'error')
           handleLogout()
         } else {
-          showMessage(`Failed to load admin dashboard: ${error.message}`, 'error')
+          const errorMsg = error.response?.data?.message || error.message || 'Failed to load admin dashboard'
+          showMessage(`Failed to load admin dashboard: ${errorMsg}`, 'error')
         }
       } finally {
         setLoading(false)
