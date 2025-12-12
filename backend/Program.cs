@@ -797,9 +797,11 @@ app.MapPost("/api/admin/grant-credits/{userId}", async (string userId, GrantCred
     {
         // Fallback to query parameter and check IsAdmin
         adminUserId = context.Request.Query["adminUserId"].ToString();
-        if (!IsAdmin(adminUserId))
+        var adminEmail = context.Request.Query["email"].ToString();
+        var isAdmin = await IsAdminAsync(adminUserId, adminEmail);
+        if (!isAdmin)
         {
-            return Results.Unauthorized();
+            return Results.Json(new { message = "Admin access required" }, statusCode: 401);
         }
     }
     
