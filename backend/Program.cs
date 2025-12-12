@@ -535,14 +535,13 @@ void LogActivity(string userId, string action, string details = "")
 }
 
 // Premium/Usage endpoints
-app.MapGet("/api/usage/{userId}", (string userId) =>
+app.MapGet("/api/usage/{userId}", async (string userId) =>
 {
-    if (!usageTracker.ContainsKey(userId))
+    var usage = await GetUserUsageAsync(userId);
+    if (usage == null)
     {
         return Results.Ok(new { dailyCount = 0, isPremium = false, dailyLimit = 5 });
     }
-    
-    var usage = usageTracker[userId];
     var today = DateTime.UtcNow.Date;
     
     if (usage.LastResetDate < today)
@@ -784,12 +783,14 @@ app.MapGet("/api/admin/activities", async (HttpContext context) =>
 .WithOpenApi();
 
 // Admin endpoint - Reset user activities - ADMIN ONLY
-app.MapPost("/api/admin/reset-user/{targetUserId}", (string targetUserId, HttpContext context) =>
+app.MapPost("/api/admin/reset-user/{targetUserId}", async (string targetUserId, HttpContext context) =>
 {
     var adminUserId = context.Request.Query["adminUserId"].ToString();
-    if (!IsAdmin(adminUserId))
+    var email = context.Request.Query["email"].ToString();
+    var isAdmin = await IsAdminAsync(adminUserId, email);
+    if (!isAdmin)
     {
-        return Results.Unauthorized();
+        return Results.Json(new { message = "Admin access required" }, statusCode: 401);
     }
     
     if (string.IsNullOrWhiteSpace(targetUserId))
@@ -797,13 +798,14 @@ app.MapPost("/api/admin/reset-user/{targetUserId}", (string targetUserId, HttpCo
         return Results.BadRequest(new { message = "User ID is required" });
     }
     
-    if (usageTracker.ContainsKey(targetUserId))
+    var usage = await GetUserUsageAsync(targetUserId);
+    if (usage != null)
     {
-        var usage = usageTracker[targetUserId];
         usage.DailyCount = 0;
         usage.LastResetDate = DateTime.UtcNow.Date;
+        await SaveUserUsageAsync(usage);
         
-        LogActivity(adminUserId, "RESET_USER", $"Reset activities for user {targetUserId}");
+        await LogActivityAsync(adminUserId, "RESET_USER", $"Reset activities for user {targetUserId}");
         
         return Results.Ok(new 
         { 
@@ -819,27 +821,31 @@ app.MapPost("/api/admin/reset-user/{targetUserId}", (string targetUserId, HttpCo
 .WithOpenApi();
 
 // Admin endpoint - Reset all activities - ADMIN ONLY
-app.MapPost("/api/admin/reset-all", (HttpContext context) =>
+app.MapPost("/api/admin/reset-all", async (HttpContext context) =>
 {
     var adminUserId = context.Request.Query["adminUserId"].ToString();
-    if (!IsAdmin(adminUserId))
+    var email = context.Request.Query["email"].ToString();
+    var isAdmin = await IsAdminAsync(adminUserId, email);
+    if (!isAdmin)
     {
-        return Results.Unauthorized();
+        return Results.Json(new { message = "Admin access required" }, statusCode: 401);
     }
     
-    foreach (var usage in usageTracker.Values)
+    var allUsers = await GetAllUsersAsync();
+    foreach (var usage in allUsers)
     {
         usage.DailyCount = 0;
         usage.LastResetDate = DateTime.UtcNow.Date;
+        await SaveUserUsageAsync(usage);
     }
     
-    LogActivity(adminUserId, "RESET_ALL", "Reset all user activities");
+    await LogActivityAsync(adminUserId, "RESET_ALL", "Reset all user activities");
     
     return Results.Ok(new 
     { 
         success = true,
         message = "All user activities reset",
-        usersReset = usageTracker.Count
+        usersReset = allUsers.Count
     });
 })
 .WithName("ResetAllActivities")
@@ -1120,10 +1126,12 @@ app.MapPost("/api/admin/connect", async (AdminConnectRequest request) =>
     // Generate consistent user ID from email (so admin can login from any device)
     var adminUserId = GenerateUserIdFromEmail(request.Email);
     
-    // Ensure user entry exists in usageTracker (for admin dashboard)
-    if (!usageTracker.ContainsKey(adminUserId))
+    // Ensure user entry exists in DynamoDB (for admin dashboard)
+    var adminUsage = await GetUserUsageAsync(adminUserId);
+    if (adminUsage == null)
     {
-        usageTracker[adminUserId] = new UserUsage { UserId = adminUserId };
+        adminUsage = new UserUsage { UserId = adminUserId };
+        await SaveUserUsageAsync(adminUsage);
     }
 
     // Get current config
@@ -1172,13 +1180,25 @@ app.MapPost("/api/admin/connect", async (AdminConnectRequest request) =>
 // GET /admin/dashboard - Get dashboard data
 app.MapGet("/api/admin/dashboard", async (HttpContext context) =>
 {
-    // User is already authenticated via login session (ProtectedAdminRoute handles that)
-    // Just verify they have a valid session token if provided
-    var userId = context.Request.Query["adminUserId"].ToString();
-    var email = context.Request.Query["email"].ToString();
+    // First try to validate admin session from token
+    var (isValidSession, sessionUserId) = await ValidateAdminSessionAsync(context);
     
-    // If no userId provided, try to get from session token
-    // For now, just proceed - session validation is handled by login
+    string userId;
+    if (isValidSession && !string.IsNullOrWhiteSpace(sessionUserId))
+    {
+        userId = sessionUserId;
+    }
+    else
+    {
+        // Fallback to query parameter and check IsAdmin
+        userId = context.Request.Query["adminUserId"].ToString();
+        var email = context.Request.Query["email"].ToString();
+        var isAdmin = await IsAdminAsync(userId, email);
+        if (!isAdmin)
+        {
+            return Results.Json(new { message = "Admin access required" }, statusCode: 401);
+        }
+    }
 
     var config = await adminConfigService.GetConfigAsync();
     var summary = await eventLogService.GetSummaryAsync();
@@ -1369,8 +1389,8 @@ app.MapGet("/api/admin/user-credits/{userId}", async (string userId, HttpContext
     var effectiveFreeLimit = config.FreeSearchLimit > 0 ? config.FreeSearchLimit : freeSearchLimit;
     
     // Check if user has a token stored (we'd need to track this, but for now return basic info)
-    // For now, return user info from usage tracker
-    var userInfo = usageTracker.ContainsKey(userId) ? usageTracker[userId] : null;
+    // For now, return user info from DynamoDB
+    var userInfo = await GetUserUsageAsync(userId);
     
     return Results.Ok(new
     {
@@ -1596,11 +1616,13 @@ app.MapPost("/api/support/contact", async (SupportRequest request) =>
     bool isPremium = false;
     if (!string.IsNullOrWhiteSpace(request.UserId))
     {
-        if (!usageTracker.ContainsKey(request.UserId))
+        var usage = await GetUserUsageAsync(request.UserId);
+        if (usage == null)
         {
-            usageTracker[request.UserId] = new UserUsage { UserId = request.UserId };
+            usage = new UserUsage { UserId = request.UserId };
+            await SaveUserUsageAsync(usage);
         }
-        isPremium = usageTracker[request.UserId].IsPremium;
+        isPremium = usage.IsPremium;
     }
     
     var ticket = new SupportTicket
@@ -1945,15 +1967,15 @@ app.MapPost("/api/payment/webhook", async (HttpContext context) =>
                     
                     if (!string.IsNullOrWhiteSpace(userId) && !string.IsNullOrWhiteSpace(planId) && int.TryParse(durationDaysStr, out var durationDays))
                     {
-                        if (!usageTracker.ContainsKey(userId))
+                        var usage = await GetUserUsageAsync(userId);
+                        if (usage == null)
                         {
-                            usageTracker[userId] = new UserUsage { UserId = userId };
+                            usage = new UserUsage { UserId = userId };
                         }
-                        
-                        var usage = usageTracker[userId];
                         usage.IsPremium = true;
                         usage.PremiumExpiresAt = DateTime.UtcNow.AddDays(durationDays);
                         usage.DailyCount = 0;
+                        await SaveUserUsageAsync(usage);
                         
                         await eventLogService.LogEventAsync(new EventLogEntry
                         {
@@ -2005,15 +2027,15 @@ app.MapPost("/api/payment/complete", async (PaymentCompleteRequest request) =>
                     
                     if (!string.IsNullOrWhiteSpace(userId) && !string.IsNullOrWhiteSpace(planId) && int.TryParse(durationDaysStr, out var durationDays))
                     {
-                        if (!usageTracker.ContainsKey(userId))
+                        var usage = await GetUserUsageAsync(userId);
+                        if (usage == null)
                         {
-                            usageTracker[userId] = new UserUsage { UserId = userId };
+                            usage = new UserUsage { UserId = userId };
                         }
-                        
-                        var usage = usageTracker[userId];
                         usage.IsPremium = true;
                         usage.PremiumExpiresAt = DateTime.UtcNow.AddDays(durationDays);
                         usage.DailyCount = 0;
+                        await SaveUserUsageAsync(usage);
                         
                         await eventLogService.LogEventAsync(new EventLogEntry
                         {
@@ -2063,15 +2085,15 @@ app.MapPost("/api/payment/complete", async (PaymentCompleteRequest request) =>
     }
     
     // Grant premium access
-    if (!usageTracker.ContainsKey(request.UserId))
+    var usageRegular = await GetUserUsageAsync(request.UserId);
+    if (usageRegular == null)
     {
-        usageTracker[request.UserId] = new UserUsage { UserId = request.UserId };
+        usageRegular = new UserUsage { UserId = request.UserId };
     }
-    
-    var usageRegular = usageTracker[request.UserId];
     usageRegular.IsPremium = true;
     usageRegular.PremiumExpiresAt = DateTime.UtcNow.AddDays(planDurations[request.PlanId]);
     usageRegular.DailyCount = 0;
+    await SaveUserUsageAsync(usageRegular);
     
     return Results.Ok(new
     {
