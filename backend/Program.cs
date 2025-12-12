@@ -3,6 +3,8 @@ using System.Text.Json.Serialization;
 using System.Linq;
 using System.Net.Mail;
 using System.Net;
+using System.Security.Cryptography;
+using System.Text;
 using PetBehaviorTranslator;
 using Stripe;
 using Stripe.Checkout;
@@ -242,23 +244,23 @@ var usageTracker = new Dictionary<string, UserUsage>();
 // Activity log for admin viewing
 var activityLog = new List<ActivityLogEntry>();
 
+// Helper function to generate consistent user ID from email (for admins)
+string GenerateUserIdFromEmail(string email)
+{
+    if (string.IsNullOrWhiteSpace(email))
+        return string.Empty;
+    
+    // Use SHA256 hash of email to create consistent user ID
+    using var sha256 = System.Security.Cryptography.SHA256.Create();
+    var hashBytes = sha256.ComputeHash(System.Text.Encoding.UTF8.GetBytes(email.ToLowerInvariant().Trim()));
+    var hashString = BitConverter.ToString(hashBytes).Replace("-", "").ToLowerInvariant();
+    return $"admin_{hashString.Substring(0, 16)}";
+}
+
 // Helper function to check if user is admin (supports both userId and email)
 async Task<bool> IsAdminAsync(string userId, string? email = null)
 {
-    if (string.IsNullOrWhiteSpace(userId))
-    {
-        Console.WriteLine($"[ADMIN CHECK] User ID is empty.");
-        return false;
-    }
-    
-    // Check legacy ADMIN_USER_ID (backwards compatibility)
-    if (!string.IsNullOrWhiteSpace(adminUserId) && userId.Trim() == adminUserId.Trim())
-    {
-        Console.WriteLine($"[ADMIN CHECK] Admin access granted via ADMIN_USER_ID for user: '{userId.Trim()}'");
-        return true;
-    }
-    
-    // Check admin email list from SSM config
+    // Check admin email list from SSM config (primary method)
     if (!string.IsNullOrWhiteSpace(email))
     {
         var isAdminEmail = await adminConfigService.IsAdminEmailAsync(email);
@@ -269,10 +271,25 @@ async Task<bool> IsAdminAsync(string userId, string? email = null)
         }
     }
     
+    // Check legacy ADMIN_USER_ID (backwards compatibility)
+    if (!string.IsNullOrWhiteSpace(adminUserId) && !string.IsNullOrWhiteSpace(userId) && userId.Trim() == adminUserId.Trim())
+    {
+        Console.WriteLine($"[ADMIN CHECK] Admin access granted via ADMIN_USER_ID for user: '{userId.Trim()}'");
+        return true;
+    }
+    
+    // Check if userId is an admin-generated ID (starts with "admin_")
+    if (!string.IsNullOrWhiteSpace(userId) && userId.StartsWith("admin_"))
+    {
+        // This is an admin user ID, but we still need to verify via email
+        // The email check above should have caught this, but if not, deny access
+        Console.WriteLine($"[ADMIN CHECK] User ID appears to be admin-generated but email not verified: '{userId}'");
+    }
+    
     // Check if token has admin flag
     // (This will be checked in endpoints that receive tokens)
     
-    Console.WriteLine($"[ADMIN CHECK] Access denied. User ID: '{userId.Trim()}'");
+    Console.WriteLine($"[ADMIN CHECK] Access denied. User ID: '{userId?.Trim() ?? "null"}', Email: '{email ?? "null"}'");
     return false;
 }
 
@@ -547,21 +564,25 @@ app.MapPost("/api/admin/remove-premium/{userId}", (string userId, HttpContext co
 .WithOpenApi();
 
 // Admin endpoint - Check if user is admin
-app.MapGet("/api/admin/check", (HttpContext context) =>
+app.MapGet("/api/admin/check", async (HttpContext context) =>
 {
     var userId = context.Request.Query["userId"].ToString();
-    var isAdmin = IsAdmin(userId);
+    var email = context.Request.Query["email"].ToString();
+    
+    // Check admin status using async method (supports email)
+    var isAdmin = await IsAdminAsync(userId, string.IsNullOrWhiteSpace(email) ? null : email);
     
     return Results.Ok(new 
     { 
         isAdmin,
         userId,
+        email = string.IsNullOrWhiteSpace(email) ? null : email,
         adminConfigured = !string.IsNullOrWhiteSpace(adminUserId),
         message = isAdmin 
             ? "You are an admin" 
-            : string.IsNullOrWhiteSpace(adminUserId) 
-                ? "Admin user ID not configured. Set ADMIN_USER_ID environment variable." 
-                : "You are not an admin. Your user ID does not match the configured admin user ID."
+            : string.IsNullOrWhiteSpace(adminUserId) && string.IsNullOrWhiteSpace(email)
+                ? "Admin access requires either ADMIN_USER_ID environment variable or your email in the admin list." 
+                : "You are not an admin. Please ensure your email is in the admin list."
     });
 })
 .WithName("CheckAdmin")
@@ -963,24 +984,34 @@ app.MapPost("/api/admin/login", async (AdminLoginRequest request) =>
 // POST /admin/connect - Admin connect endpoint
 app.MapPost("/api/admin/connect", async (AdminConnectRequest request) =>
 {
-    if (string.IsNullOrWhiteSpace(request.UserId))
+    // For admin login, email is required (not userId)
+    if (string.IsNullOrWhiteSpace(request.Email))
     {
-        return Results.BadRequest(new { message = "UserId is required" });
+        return Results.BadRequest(new { message = "Email is required for admin access" });
     }
 
-    // Check if user is admin
-    var isAdmin = await IsAdminAsync(request.UserId, request.Email);
+    // Check if user is admin via email
+    var isAdmin = await IsAdminAsync(request.UserId ?? string.Empty, request.Email);
     if (!isAdmin)
     {
-        return Results.Json(new { message = "Admin access required" }, statusCode: 401);
+        return Results.Json(new { message = "Admin access required. Please ensure your email is in the admin list." }, statusCode: 401);
+    }
+
+    // Generate consistent user ID from email (so admin can login from any device)
+    var adminUserId = GenerateUserIdFromEmail(request.Email);
+    
+    // Ensure user entry exists in usageTracker (for admin dashboard)
+    if (!usageTracker.ContainsKey(adminUserId))
+    {
+        usageTracker[adminUserId] = new UserUsage { UserId = adminUserId };
     }
 
     // Get current config
     var config = await adminConfigService.GetConfigAsync();
     
-    // Create admin token with large expiry
+    // Create admin token with large expiry using consistent admin user ID
     var adminToken = tokenService.CreateToken(
-        request.UserId,
+        adminUserId,
         freeSearchesUsed: 0,
         creditsRemaining: 0,
         isAdmin: true,
@@ -991,10 +1022,20 @@ app.MapPost("/api/admin/connect", async (AdminConnectRequest request) =>
     // Get dashboard summary
     var summary = await eventLogService.GetSummaryAsync();
 
+    await eventLogService.LogEventAsync(new EventLogEntry
+    {
+        EventType = "ADMIN_CONNECT",
+        UserId = adminUserId,
+        Email = request.Email,
+        Status = "SUCCESS",
+        Details = $"Admin connected from device, generated consistent user ID: {adminUserId}"
+    });
+
     return Results.Ok(new
     {
         success = true,
         adminToken,
+        adminUserId, // Return the consistent user ID to frontend
         summary = new
         {
             todaysTranslations = summary.TodaysTranslations,
