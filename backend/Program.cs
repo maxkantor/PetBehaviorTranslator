@@ -112,6 +112,9 @@ var eventLogBucket = await secretsService.GetSecretOrEnvAsync("EVENT_LOG_BUCKET"
 // Initialize EventLogService
 var eventLogService = new EventLogService(eventLogBucket);
 
+// Initialize DynamoDB Service for persistent storage
+var dynamoDBService = new DynamoDBService();
+
 // Load credit tiers from configuration (will be overridden by admin config if available)
 var creditTiers = builder.Configuration.GetSection("CreditSystem:Tiers").Get<List<CreditTier>>() 
     ?? new List<CreditTier>();
@@ -238,11 +241,104 @@ string GenerateAmazonAffiliateLink(string productName)
     return $"https://www.amazon.com/s?k={searchQuery}&tag={amazonTag}";
 }
 
-// In-memory storage for usage tracking (replace with DynamoDB in production)
+// In-memory storage for usage tracking (fallback if DynamoDB fails)
 var usageTracker = new Dictionary<string, UserUsage>();
 
-// Activity log for admin viewing
+// Activity log for admin viewing (fallback if DynamoDB fails)
 var activityLog = new List<ActivityLogEntry>();
+
+// Helper function to get user usage (try DynamoDB first, fallback to in-memory)
+async Task<UserUsage?> GetUserUsageAsync(string userId)
+{
+    try
+    {
+        var usage = await dynamoDBService.GetUserUsageAsync(userId);
+        if (usage != null)
+        {
+            // Sync to in-memory for quick access
+            usageTracker[userId] = usage;
+            return usage;
+        }
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"[DYNAMODB] Error getting user usage from DynamoDB, falling back to in-memory: {ex.Message}");
+    }
+    
+    // Fallback to in-memory
+    return usageTracker.ContainsKey(userId) ? usageTracker[userId] : null;
+}
+
+// Helper function to save user usage (save to both DynamoDB and in-memory)
+async Task SaveUserUsageAsync(UserUsage usage)
+{
+    // Save to DynamoDB
+    try
+    {
+        await dynamoDBService.SaveUserUsageAsync(usage);
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"[DYNAMODB] Error saving user usage to DynamoDB: {ex.Message}");
+    }
+    
+    // Also keep in-memory for quick access
+    usageTracker[usage.UserId] = usage;
+}
+
+// Helper function to get all users (try DynamoDB first, fallback to in-memory)
+async Task<List<UserUsage>> GetAllUsersAsync()
+{
+    try
+    {
+        var users = await dynamoDBService.GetAllUserUsageAsync();
+        if (users != null && users.Count > 0)
+        {
+            // Sync to in-memory for quick access
+            foreach (var user in users)
+            {
+                usageTracker[user.UserId] = user;
+            }
+            return users;
+        }
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"[DYNAMODB] Error getting all users from DynamoDB, falling back to in-memory: {ex.Message}");
+    }
+    
+    // Fallback to in-memory
+    return usageTracker.Values.ToList();
+}
+
+// Helper function to log activity (save to both DynamoDB and in-memory)
+async Task LogActivityAsync(string userId, string activityType, string details)
+{
+    var entry = new ActivityLogEntry
+    {
+        UserId = userId,
+        Action = activityType,
+        Details = details,
+        Timestamp = DateTime.UtcNow
+    };
+    
+    // Save to DynamoDB
+    try
+    {
+        await dynamoDBService.SaveActivityLogAsync(entry);
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"[DYNAMODB] Error saving activity log to DynamoDB: {ex.Message}");
+    }
+    
+    // Also keep in-memory for quick access
+    activityLog.Add(entry);
+    if (activityLog.Count > 1000)
+    {
+        activityLog.RemoveAt(0);
+    }
+}
 
 // Helper function to generate consistent user ID from email (for admins)
 string GenerateUserIdFromEmail(string email)
@@ -418,9 +514,13 @@ bool IsPetBehaviorRelated(string behavior)
     return false; // Stricter: require explicit pet keywords
 }
 
-// Helper function to log activity
+// Synchronous wrapper for backwards compatibility (calls async version)
 void LogActivity(string userId, string action, string details = "")
 {
+    // Fire and forget - don't await to maintain synchronous behavior
+    _ = Task.Run(async () => await LogActivityAsync(userId, action, details));
+    
+    // Also add to in-memory immediately for backwards compatibility
     activityLog.Add(new ActivityLogEntry
     {
         UserId = userId,
@@ -428,8 +528,6 @@ void LogActivity(string userId, string action, string details = "")
         Details = details,
         Timestamp = DateTime.UtcNow
     });
-    
-    // Keep only last 1000 activities
     if (activityLog.Count > 1000)
     {
         activityLog.RemoveAt(0);
@@ -464,19 +562,19 @@ app.MapGet("/api/usage/{userId}", (string userId) =>
 .WithName("GetUsage")
 .WithOpenApi();
 
-app.MapPost("/api/premium/status", (PremiumStatusRequest request) =>
+app.MapPost("/api/premium/status", async (PremiumStatusRequest request) =>
 {
     if (string.IsNullOrWhiteSpace(request.UserId))
     {
         return Results.BadRequest(new { message = "User ID is required" });
     }
     
-    if (!usageTracker.ContainsKey(request.UserId))
+    var usage = await GetUserUsageAsync(request.UserId);
+    if (usage == null)
     {
-        usageTracker[request.UserId] = new UserUsage { UserId = request.UserId };
+        usage = new UserUsage { UserId = request.UserId };
+        await SaveUserUsageAsync(usage);
     }
-    
-    var usage = usageTracker[request.UserId];
     usage.IsPremium = request.IsPremium;
     
     if (request.IsPremium)
@@ -490,7 +588,7 @@ app.MapPost("/api/premium/status", (PremiumStatusRequest request) =>
 .WithOpenApi();
 
 // Admin endpoint - Set any user to premium/admin - ADMIN ONLY
-app.MapPost("/api/admin/set-premium/{userId}", (string userId, HttpContext context) =>
+app.MapPost("/api/admin/set-premium/{userId}", async (string userId, HttpContext context) =>
 {
     var adminUserId = context.Request.Query["adminUserId"].ToString();
     if (!IsAdmin(adminUserId))
@@ -503,15 +601,15 @@ app.MapPost("/api/admin/set-premium/{userId}", (string userId, HttpContext conte
         return Results.BadRequest(new { message = "User ID is required" });
     }
     
-    if (!usageTracker.ContainsKey(userId))
+    var usage = await GetUserUsageAsync(userId);
+    if (usage == null)
     {
-        usageTracker[userId] = new UserUsage { UserId = userId };
+        usage = new UserUsage { UserId = userId };
     }
-    
-    var usage = usageTracker[userId];
     usage.IsPremium = true;
     usage.PremiumExpiresAt = DateTime.UtcNow.AddYears(10); // 10 years expiration
     usage.DailyCount = 0; // Reset count
+    await SaveUserUsageAsync(usage);
     
     LogActivity(adminUserId, "SET_PREMIUM", $"Set premium for user {userId}");
     
@@ -527,7 +625,7 @@ app.MapPost("/api/admin/set-premium/{userId}", (string userId, HttpContext conte
 .WithOpenApi();
 
 // Admin endpoint - Remove premium status (revert to normal user) - ADMIN ONLY
-app.MapPost("/api/admin/remove-premium/{userId}", (string userId, HttpContext context) =>
+app.MapPost("/api/admin/remove-premium/{userId}", async (string userId, HttpContext context) =>
 {
     var adminUserId = context.Request.Query["adminUserId"].ToString();
     if (!IsAdmin(adminUserId))
@@ -540,15 +638,15 @@ app.MapPost("/api/admin/remove-premium/{userId}", (string userId, HttpContext co
         return Results.BadRequest(new { message = "User ID is required" });
     }
     
-    if (!usageTracker.ContainsKey(userId))
+    var usage = await GetUserUsageAsync(userId);
+    if (usage == null)
     {
-        usageTracker[userId] = new UserUsage { UserId = userId };
+        usage = new UserUsage { UserId = userId };
     }
-    
-    var usage = usageTracker[userId];
     usage.IsPremium = false;
     usage.PremiumExpiresAt = null;
     usage.DailyCount = 0; // Reset count to start fresh
+    await SaveUserUsageAsync(usage);
     
     LogActivity(adminUserId, "REMOVE_PREMIUM", $"Removed premium from user {userId}");
     
@@ -603,13 +701,16 @@ app.MapGet("/api/admin/users", async (HttpContext context) =>
     {
         // Fallback to query parameter and check IsAdmin
         userId = context.Request.Query["adminUserId"].ToString();
-        if (!IsAdmin(userId))
+        var email = context.Request.Query["email"].ToString();
+        var isAdmin = await IsAdminAsync(userId, email);
+        if (!isAdmin)
         {
-            return Results.Unauthorized();
+            return Results.Json(new { message = "Admin access required" }, statusCode: 401);
         }
     }
     
-    var users = usageTracker.Values.Select(u => new
+    var allUsers = await GetAllUsersAsync();
+    var users = allUsers.Select(u => new
     {
         u.UserId,
         u.DailyCount,
@@ -618,7 +719,7 @@ app.MapGet("/api/admin/users", async (HttpContext context) =>
         u.LastResetDate
     }).ToList();
     
-    LogActivity(userId, "VIEW_USERS", $"Viewed {users.Count} users");
+    await LogActivityAsync(userId, "VIEW_USERS", $"Viewed {users.Count} users");
     
     return Results.Ok(new { users, totalCount = users.Count });
 })
@@ -640,13 +741,30 @@ app.MapGet("/api/admin/activities", async (HttpContext context) =>
     {
         // Fallback to query parameter and check IsAdmin
         userId = context.Request.Query["adminUserId"].ToString();
-        if (!IsAdmin(userId))
+        var email = context.Request.Query["email"].ToString();
+        var isAdmin = await IsAdminAsync(userId, email);
+        if (!isAdmin)
         {
-            return Results.Unauthorized();
+            return Results.Json(new { message = "Admin access required" }, statusCode: 401);
         }
     }
     
-    var activities = activityLog
+    // Try to get from DynamoDB first
+    List<ActivityLogEntry> allActivities;
+    try
+    {
+        allActivities = await dynamoDBService.GetRecentActivityLogsAsync(500);
+        // Also sync to in-memory
+        activityLog.Clear();
+        activityLog.AddRange(allActivities.Take(1000));
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"[DYNAMODB] Error getting activities from DynamoDB, using in-memory: {ex.Message}");
+        allActivities = activityLog;
+    }
+    
+    var activities = allActivities
         .OrderByDescending(a => a.Timestamp)
         .Take(500)
         .Select(a => new
@@ -658,9 +776,9 @@ app.MapGet("/api/admin/activities", async (HttpContext context) =>
         })
         .ToList();
     
-    LogActivity(userId, "VIEW_ACTIVITIES", $"Viewed {activities.Count} activities");
+    await LogActivityAsync(userId, "VIEW_ACTIVITIES", $"Viewed {activities.Count} activities");
     
-    return Results.Ok(new { activities, totalCount = activityLog.Count });
+    return Results.Ok(new { activities, totalCount = allActivities.Count });
 })
 .WithName("GetActivities")
 .WithOpenApi();
@@ -728,7 +846,7 @@ app.MapPost("/api/admin/reset-all", (HttpContext context) =>
 .WithOpenApi();
 
 // Admin endpoint - Set premium status with specific plan - ADMIN ONLY
-app.MapPost("/api/admin/set-premium-plan/{userId}", (string userId, PremiumPlanRequest request, HttpContext context) =>
+app.MapPost("/api/admin/set-premium-plan/{userId}", async (string userId, PremiumPlanRequest request, HttpContext context) =>
 {
     var adminUserId = context.Request.Query["adminUserId"].ToString();
     if (!IsAdmin(adminUserId))
@@ -741,12 +859,11 @@ app.MapPost("/api/admin/set-premium-plan/{userId}", (string userId, PremiumPlanR
         return Results.BadRequest(new { message = "User ID is required" });
     }
     
-    if (!usageTracker.ContainsKey(userId))
+    var usage = await GetUserUsageAsync(userId);
+    if (usage == null)
     {
-        usageTracker[userId] = new UserUsage { UserId = userId };
+        usage = new UserUsage { UserId = userId };
     }
-    
-    var usage = usageTracker[userId];
     usage.IsPremium = true;
     
     // Set expiration based on plan
@@ -767,6 +884,7 @@ app.MapPost("/api/admin/set-premium-plan/{userId}", (string userId, PremiumPlanR
     }
     
     usage.DailyCount = 0; // Reset count
+    await SaveUserUsageAsync(usage);
     
     LogActivity(adminUserId, "SET_PREMIUM_PLAN", $"Set {request.PlanId} plan for user {userId}");
     
@@ -1981,9 +2099,11 @@ app.MapPost("/api/credits/get-token", async (GetTokenRequest request) =>
     }
 
     // Create user entry if it doesn't exist (so they appear in admin dashboard)
-    if (!usageTracker.ContainsKey(request.UserId))
+    var usage = await GetUserUsageAsync(request.UserId);
+    if (usage == null)
     {
-        usageTracker[request.UserId] = new UserUsage { UserId = request.UserId };
+        usage = new UserUsage { UserId = request.UserId };
+        await SaveUserUsageAsync(usage);
     }
 
     // Check if user is admin
@@ -2983,4 +3103,5 @@ public class Message
     [JsonPropertyName("content")]
     public string? Content { get; set; }
 }
+
 
