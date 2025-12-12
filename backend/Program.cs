@@ -960,7 +960,16 @@ app.MapPost("/api/admin/grant-credits/{userId}", async (string userId, GrantCred
     payload.CreditsRemaining += request.Credits;
     var newToken = tokenService.UpdateToken(payload);
     
-    LogActivity(adminUserId, "GRANT_CREDITS", $"Granted {request.Credits} credits to user {userId}");
+    // Ensure user exists in DynamoDB
+    var usage = await GetUserUsageAsync(userId);
+    if (usage == null)
+    {
+        usage = new UserUsage { UserId = userId };
+    }
+    // Note: UserUsage doesn't store credits (that's in the token), but we save to ensure user appears in admin
+    await SaveUserUsageAsync(usage);
+    
+    await LogActivityAsync(adminUserId, "GRANT_CREDITS", $"Granted {request.Credits} credits to user {userId}");
     
     return Results.Ok(new
     {
@@ -1482,7 +1491,16 @@ app.MapPost("/api/admin/set-user-credits/{userId}", async (string userId, SetUse
     
     var newToken = tokenService.UpdateToken(payload);
     
-    LogActivity(adminUserId, "SET_USER_CREDITS", $"Admin {adminUserId} set user {userId} credits to {request.Credits}");
+    // Ensure user exists in DynamoDB
+    var usage = await GetUserUsageAsync(userId);
+    if (usage == null)
+    {
+        usage = new UserUsage { UserId = userId };
+    }
+    // Note: UserUsage doesn't store credits (that's in the token), but we save to ensure user appears in admin
+    await SaveUserUsageAsync(usage);
+    
+    await LogActivityAsync(adminUserId, "SET_USER_CREDITS", $"Admin {adminUserId} set user {userId} credits to {request.Credits}");
     
     await eventLogService.LogEventAsync(new EventLogEntry
     {
