@@ -185,7 +185,10 @@ function Admin() {
     }
     setSettingCredits(userId)
     try {
-      const token = getCreditToken()
+      // For setting credits for another user, pass null for existingToken
+      // The backend will create a new token for that user
+      // Only pass token if setting credits for current user
+      const token = userId === currentUserId ? getCreditToken() : null
       const result = await setUserCredits(userId, credits, token)
       showMessage(`Set ${userId} credits to ${credits}. New token generated.`, 'success')
       
@@ -193,16 +196,23 @@ function Admin() {
       if (result.token) {
         setUserTokens({ ...userTokens, [userId]: { token: result.token, credits: result.creditsRemaining || credits } })
         setShowingToken({ ...showingToken, [userId]: true })
+        
+        // If setting credits for current user, update their token
+        if (userId === currentUserId) {
+          localStorage.setItem('creditToken', result.token)
+        }
       }
       
       // Clear the input
       setUserCustomCredits({ ...userCustomCredits, [userId]: '' })
       await loadUsers() // Refresh user list
     } catch (error) {
+      console.error('Error setting credits:', error)
       if (error.response?.status === 401) {
         showMessage('Access denied. Admin access required.', 'error')
       } else {
-        showMessage('Failed to set credits: ' + (error.response?.data?.message || error.message), 'error')
+        const errorMsg = error.response?.data?.message || error.message || 'Failed to set credits'
+        showMessage('Failed to set credits: ' + errorMsg, 'error')
       }
     } finally {
       setSettingCredits(null)
@@ -212,8 +222,10 @@ function Admin() {
   const handleGrantCredits = async (userId) => {
     setGrantingCredits(userId)
     try {
-      const token = getCreditToken()
-      const result = await grantCredits(userId, creditsToGrant, token)
+      // For granting credits, try to get the user's existing token if available
+      // Otherwise pass null and backend will create a new token
+      const userToken = userTokens[userId]?.token || null
+      const result = await grantCredits(userId, creditsToGrant, userToken)
       showMessage(`Granted ${creditsToGrant} credits to ${userId}. New token generated.`, 'success')
       
       // Store the new token for this user
@@ -228,10 +240,12 @@ function Admin() {
       }
       await loadUsers() // Refresh user list
     } catch (error) {
+      console.error('Error granting credits:', error)
       if (error.response?.status === 401) {
         showMessage('Access denied. Admin access required.', 'error')
       } else {
-        showMessage('Failed to grant credits', 'error')
+        const errorMsg = error.response?.data?.message || error.message || 'Failed to grant credits'
+        showMessage('Failed to grant credits: ' + errorMsg, 'error')
       }
     } finally {
       setGrantingCredits(null)
