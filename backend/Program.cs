@@ -277,9 +277,17 @@ async Task SaveUserUsageAsync(UserUsage usage)
     {
         await dynamoDBService.SaveUserUsageAsync(usage);
     }
+    catch (Amazon.DynamoDBv2.Model.ResourceNotFoundException ex)
+    {
+        Console.WriteLine($"[DYNAMODB] CRITICAL: Table does not exist. Please create DynamoDB table 'PetTranslator-UserUsage' with primary key 'UserId' (String)");
+        Console.WriteLine($"[DYNAMODB] Error details: {ex.Message}");
+        // Continue to save in-memory so app doesn't break
+    }
     catch (Exception ex)
     {
         Console.WriteLine($"[DYNAMODB] Error saving user usage to DynamoDB: {ex.Message}");
+        Console.WriteLine($"[DYNAMODB] Stack trace: {ex.StackTrace}");
+        // Continue to save in-memory so app doesn't break
     }
     
     // Also keep in-memory for quick access
@@ -294,6 +302,7 @@ async Task<List<UserUsage>> GetAllUsersAsync()
         var users = await dynamoDBService.GetAllUserUsageAsync();
         if (users != null && users.Count > 0)
         {
+            Console.WriteLine($"[DYNAMODB] Retrieved {users.Count} users from DynamoDB");
             // Sync to in-memory for quick access
             foreach (var user in users)
             {
@@ -301,14 +310,29 @@ async Task<List<UserUsage>> GetAllUsersAsync()
             }
             return users;
         }
+        else
+        {
+            Console.WriteLine($"[DYNAMODB] DynamoDB table is empty (0 users found). Falling back to in-memory storage.");
+        }
+    }
+    catch (Amazon.DynamoDBv2.Model.ResourceNotFoundException ex)
+    {
+        Console.WriteLine($"[DYNAMODB] CRITICAL: Table 'PetTranslator-UserUsage' does not exist!");
+        Console.WriteLine($"[DYNAMODB] Please create the table in AWS Console with:");
+        Console.WriteLine($"[DYNAMODB]   - Table name: PetTranslator-UserUsage");
+        Console.WriteLine($"[DYNAMODB]   - Primary key: UserId (String)");
+        Console.WriteLine($"[DYNAMODB] Error: {ex.Message}");
     }
     catch (Exception ex)
     {
         Console.WriteLine($"[DYNAMODB] Error getting all users from DynamoDB, falling back to in-memory: {ex.Message}");
+        Console.WriteLine($"[DYNAMODB] Stack trace: {ex.StackTrace}");
     }
     
     // Fallback to in-memory
-    return usageTracker.Values.ToList();
+    var inMemoryUsers = usageTracker.Values.ToList();
+    Console.WriteLine($"[DYNAMODB] Returning {inMemoryUsers.Count} users from in-memory storage");
+    return inMemoryUsers;
 }
 
 // Helper function to log activity (save to both DynamoDB and in-memory)
@@ -708,19 +732,43 @@ app.MapGet("/api/admin/users", async (HttpContext context) =>
         }
     }
     
-    var allUsers = await GetAllUsersAsync();
-    var users = allUsers.Select(u => new
+    try
     {
-        u.UserId,
-        u.DailyCount,
-        u.IsPremium,
-        u.PremiumExpiresAt,
-        u.LastResetDate
-    }).ToList();
-    
-    await LogActivityAsync(userId, "VIEW_USERS", $"Viewed {users.Count} users");
-    
-    return Results.Ok(new { users, totalCount = users.Count });
+        var allUsers = await GetAllUsersAsync();
+        var users = allUsers.Select(u => new
+        {
+            u.UserId,
+            u.DailyCount,
+            u.IsPremium,
+            u.PremiumExpiresAt,
+            u.LastResetDate
+        }).ToList();
+        
+        await LogActivityAsync(userId, "VIEW_USERS", $"Viewed {users.Count} users");
+        
+        // Add helpful message if no users found
+        string? message = null;
+        if (users.Count == 0)
+        {
+            message = "No users found. Users will appear here after they use the app (e.g., get a token, make a translation, etc.).";
+        }
+        
+        return Results.Ok(new { 
+            users, 
+            totalCount = users.Count,
+            message = message
+        });
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"[ADMIN] Error getting users: {ex.Message}");
+        return Results.Json(new { 
+            users = new List<object>(), 
+            totalCount = 0,
+            error = "Failed to retrieve users from DynamoDB",
+            message = "DynamoDB table may not exist. Please create 'PetTranslator-UserUsage' table with primary key 'UserId' (String)."
+        }, statusCode: 500);
+    }
 })
 .WithName("GetAllUsers")
 .WithOpenApi();

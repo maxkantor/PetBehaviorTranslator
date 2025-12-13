@@ -77,10 +77,20 @@ public class DynamoDBService
                 TableName = UserUsageTable,
                 Item = item
             });
+            
+            Console.WriteLine($"[DYNAMODB] Successfully saved user {usage.UserId} to table {UserUsageTable}");
+        }
+        catch (Amazon.DynamoDBv2.Model.ResourceNotFoundException ex)
+        {
+            Console.WriteLine($"[DYNAMODB] ERROR: Table {UserUsageTable} does not exist: {ex.Message}");
+            Console.WriteLine($"[DYNAMODB] Please create the table in AWS Console with primary key: UserId (String)");
+            throw; // Re-throw so caller knows save failed
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[DYNAMODB] Error saving user usage: {ex.Message}");
+            Console.WriteLine($"[DYNAMODB] Error saving user usage for {usage.UserId}: {ex.Message}");
+            Console.WriteLine($"[DYNAMODB] Stack trace: {ex.StackTrace}");
+            throw; // Re-throw so caller knows save failed
         }
     }
 
@@ -88,10 +98,32 @@ public class DynamoDBService
     {
         try
         {
+            // First, check if table exists
+            try
+            {
+                var describeRequest = new Amazon.DynamoDBv2.Model.DescribeTableRequest
+                {
+                    TableName = UserUsageTable
+                };
+                await _dynamoDbClient.DescribeTableAsync(describeRequest);
+            }
+            catch (Amazon.DynamoDBv2.Model.ResourceNotFoundException)
+            {
+                Console.WriteLine($"[DYNAMODB] Table {UserUsageTable} does not exist. Please create it in AWS Console.");
+                return new List<UserUsage>();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[DYNAMODB] Error checking if table exists: {ex.Message}");
+                return new List<UserUsage>();
+            }
+
             var response = await _dynamoDbClient.ScanAsync(new ScanRequest
             {
                 TableName = UserUsageTable
             });
+
+            Console.WriteLine($"[DYNAMODB] Scanned table {UserUsageTable}, found {response.Items.Count} items");
 
             return response.Items.Select(item => 
             {
@@ -113,9 +145,15 @@ public class DynamoDBService
                 return usage;
             }).ToList();
         }
+        catch (Amazon.DynamoDBv2.Model.ResourceNotFoundException ex)
+        {
+            Console.WriteLine($"[DYNAMODB] Table {UserUsageTable} not found: {ex.Message}");
+            return new List<UserUsage>();
+        }
         catch (Exception ex)
         {
             Console.WriteLine($"[DYNAMODB] Error getting all user usage: {ex.Message}");
+            Console.WriteLine($"[DYNAMODB] Stack trace: {ex.StackTrace}");
             return new List<UserUsage>();
         }
     }
