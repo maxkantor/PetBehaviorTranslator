@@ -8,3 +8,4 @@ Sitemap: https://www.petbehaviortranslator.com/sitemap.xml
 Disallow: /admin
 Disallow: /admin/login
 
+

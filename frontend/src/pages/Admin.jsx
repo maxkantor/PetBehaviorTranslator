@@ -106,6 +106,17 @@ function Admin() {
       const data = await getAllUsers()
       setUsers(data.users || [])
       console.log('Loaded users:', data.users)
+      
+      // Show helpful message if no users found
+      if (data.users && data.users.length === 0 && data.message) {
+        console.log('No users found:', data.message)
+        // Don't show as error, just log it - the UI already shows "No users found"
+      }
+      
+      // Show error message if there's an error in the response
+      if (data.error) {
+        showMessage(data.message || data.error, 'error')
+      }
     } catch (error) {
       console.error('Error loading users:', error)
       console.error('Error response:', error.response?.data)
@@ -124,6 +135,14 @@ function Admin() {
         }
         showMessage(errorMsg, 'error')
         setIsAdmin(false)
+      } else if (error.response?.status === 500) {
+        // Server error - might be DynamoDB issue
+        const errorData = error.response?.data
+        if (errorData?.message) {
+          showMessage(`DynamoDB Error: ${errorData.message}\n\nCheck DYNAMODB_SETUP.md for instructions on creating the tables.`, 'error')
+        } else {
+          showMessage(`Server error: ${error.response?.data?.error || error.message}\n\nCheck CloudWatch logs for details.`, 'error')
+        }
       } else {
         showMessage(`Failed to load users: ${error.response?.data?.message || error.message}`, 'error')
       }

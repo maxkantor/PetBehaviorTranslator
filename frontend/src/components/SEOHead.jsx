@@ -68,3 +68,4 @@ export default function SEOHead({ title, description, keywords, ogImage }) {
   return null // This component doesn't render anything
 }
 
+
