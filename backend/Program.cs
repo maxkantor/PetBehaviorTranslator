@@ -513,14 +513,21 @@ async Task<(bool isValid, string? userId)> ValidateAdminSessionAsync(HttpContext
     var payload = tokenService.ValidateToken(token);
     if (payload == null)
     {
-        Console.WriteLine("[ADMIN SESSION] Invalid or expired token");
+        Console.WriteLine("[ADMIN SESSION] Invalid or expired token (token validation returned null)");
         return (false, null);
     }
     
     // Check if token has admin flag
     if (!payload.IsAdmin)
     {
-        Console.WriteLine($"[ADMIN SESSION] Token does not have admin flag for user: {payload.UserId}");
+        Console.WriteLine($"[ADMIN SESSION] Token does not have admin flag for user: {payload.UserId} (IsAdmin={payload.IsAdmin})");
+        return (false, null);
+    }
+    
+    // Check if token is expired
+    if (payload.ExpiresAt > 0 && payload.ExpiresAt < DateTimeOffset.UtcNow.ToUnixTimeSeconds())
+    {
+        Console.WriteLine($"[ADMIN SESSION] Token expired for user: {payload.UserId} (expired at {DateTimeOffset.FromUnixTimeSeconds(payload.ExpiresAt).ToString("O")})");
         return (false, null);
     }
     
@@ -775,11 +782,49 @@ app.MapPost("/api/admin/remove-premium/{userId}", async (string userId, HttpCont
 // Admin endpoint - Check if user is admin
 app.MapGet("/api/admin/check", async (HttpContext context) =>
 {
-    var userId = context.Request.Query["userId"].ToString();
-    var email = context.Request.Query["email"].ToString();
+    // First try to validate admin session from token
+    var (isValidSession, sessionUserId) = await ValidateAdminSessionAsync(context);
     
-    // Check admin status using async method (supports email)
-    var isAdmin = await IsAdminAsync(userId, string.IsNullOrWhiteSpace(email) ? null : email);
+    string userId;
+    string? email = null;
+    bool isAdmin = false;
+    
+    if (isValidSession && !string.IsNullOrWhiteSpace(sessionUserId))
+    {
+        // Session token is valid - user is admin
+        userId = sessionUserId;
+        isAdmin = true;
+        Console.WriteLine($"[ADMIN CHECK] ✅ Valid admin session for user: {userId}");
+    }
+    else
+    {
+        // Fallback to query parameter and check IsAdmin
+        // Check both "userId" and "adminUserId" for compatibility
+        userId = context.Request.Query["userId"].ToString();
+        if (string.IsNullOrWhiteSpace(userId))
+        {
+            userId = context.Request.Query["adminUserId"].ToString();
+        }
+        
+        email = context.Request.Query["email"].ToString();
+        
+        if (string.IsNullOrWhiteSpace(userId))
+        {
+            // No userId provided at all
+            return Results.Ok(new 
+            { 
+                isAdmin = false,
+                userId = string.Empty,
+                email = (string?)null,
+                adminConfigured = !string.IsNullOrWhiteSpace(adminUserId),
+                message = "User ID is required. Please log in first."
+            });
+        }
+        
+        // Check admin status using async method (supports email)
+        isAdmin = await IsAdminAsync(userId, string.IsNullOrWhiteSpace(email) ? null : email);
+        Console.WriteLine($"[ADMIN CHECK] Session validation failed, checked via IsAdminAsync: userId={userId}, email={email ?? "null"}, isAdmin={isAdmin}");
+    }
     
     return Results.Ok(new 
     { 
