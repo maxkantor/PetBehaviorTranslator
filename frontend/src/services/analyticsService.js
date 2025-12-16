@@ -17,13 +17,18 @@ export const loadAnalyticsConfig = async () => {
       if (config.gaMeasurementId) {
         GA_MEASUREMENT_ID = config.gaMeasurementId
       }
-      if (config.mixpanelToken) {
+      if (config.mixpanelToken && config.mixpanelToken.trim() !== '') {
         MIXPANEL_TOKEN = config.mixpanelToken
       }
     }
   } catch (error) {
     console.log('Failed to load analytics config from API, using environment variables:', error)
     // Fall back to environment variables if API fails
+  }
+  
+  // Final check - if still no token, ensure it's empty string
+  if (!MIXPANEL_TOKEN || MIXPANEL_TOKEN.trim() === '') {
+    MIXPANEL_TOKEN = ''
   }
 }
 
@@ -56,69 +61,73 @@ export const initGoogleAnalytics = () => {
 
 // Initialize Mixpanel
 export const initMixpanel = () => {
-  if (!MIXPANEL_TOKEN) {
-    console.log('Mixpanel not configured (VITE_MIXPANEL_TOKEN not set)')
+  // Strict check - only proceed if token exists and is not empty
+  if (!MIXPANEL_TOKEN || MIXPANEL_TOKEN.trim() === '') {
+    // Absolutely do not load Mixpanel if no token
     return
   }
 
-  // Check if Mixpanel is already loaded
-  if (window.mixpanel) {
-    try {
-      window.mixpanel.init(MIXPANEL_TOKEN, {
-        track_pageview: true,
-        persistence: 'localStorage'
-      })
-      console.log('Mixpanel initialized (already loaded)')
-      return
-    } catch (error) {
-      console.warn('Mixpanel already initialized, skipping:', error)
-      return
-    }
+  // Check if Mixpanel is already loaded and initialized
+  if (window.mixpanel && MIXPANEL_INITIALIZED) {
+    return // Already initialized
   }
 
-  // Load Mixpanel script
-  const script = document.createElement('script')
-  script.async = true
-  script.src = 'https://cdn.mxpnl.com/libs/mixpanel-2-latest.min.js'
-  
-  script.onload = () => {
-    // Poll for Mixpanel to be available (it may take a moment to initialize)
-    let attempts = 0
-    const maxAttempts = 20 // Try for up to 2 seconds (20 * 100ms)
-    
-    const checkMixpanel = setInterval(() => {
-      attempts++
-      
-      // Check multiple ways Mixpanel might be available
-      const mixpanel = window.mixpanel || (window.mixpanel && window.mixpanel.mixpanel)
-      
-      if (mixpanel && typeof mixpanel.init === 'function') {
-        clearInterval(checkMixpanel)
+  // Check if Mixpanel script is already in the page
+  const existingScript = document.querySelector('script[src*="mixpanel"]')
+  if (existingScript && !window.mixpanel) {
+    // Script is loading but not ready yet - wait for it
+    const checkExisting = setInterval(() => {
+      if (window.mixpanel && typeof window.mixpanel.init === 'function') {
+        clearInterval(checkExisting)
         try {
-          mixpanel.init(MIXPANEL_TOKEN, {
+          window.mixpanel.init(MIXPANEL_TOKEN, {
             track_pageview: true,
             persistence: 'localStorage'
           })
           MIXPANEL_INITIALIZED = true
-          console.log('Mixpanel initialized successfully')
         } catch (error) {
-          console.warn('Error initializing Mixpanel:', error)
           MIXPANEL_INITIALIZED = false
         }
-      } else if (attempts >= maxAttempts) {
-        clearInterval(checkMixpanel)
-        // Silently fail - Mixpanel may be blocked by ad blocker or not available
-        MIXPANEL_INITIALIZED = false
       }
     }, 100)
+    
+    // Stop checking after 2 seconds
+    setTimeout(() => clearInterval(checkExisting), 2000)
+    return
   }
-  
-  script.onerror = () => {
-    console.warn('Failed to load Mixpanel script - analytics will be disabled')
-    // Don't throw error - just log warning
+
+  // Only load script if not already present
+  if (!existingScript) {
+    // Load Mixpanel script
+    const script = document.createElement('script')
+    script.async = true
+    script.src = 'https://cdn.mxpnl.com/libs/mixpanel-2-latest.min.js'
+    
+    script.onload = () => {
+      // Wait a moment for Mixpanel to be available
+      setTimeout(() => {
+        if (window.mixpanel && typeof window.mixpanel.init === 'function') {
+          try {
+            window.mixpanel.init(MIXPANEL_TOKEN, {
+              track_pageview: true,
+              persistence: 'localStorage'
+            })
+            MIXPANEL_INITIALIZED = true
+          } catch (error) {
+            MIXPANEL_INITIALIZED = false
+          }
+        } else {
+          MIXPANEL_INITIALIZED = false
+        }
+      }, 200)
+    }
+    
+    script.onerror = () => {
+      MIXPANEL_INITIALIZED = false
+    }
+    
+    document.head.appendChild(script)
   }
-  
-  document.head.appendChild(script)
 }
 
 // Track page view
