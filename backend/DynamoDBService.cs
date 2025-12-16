@@ -1,5 +1,6 @@
 using Amazon.DynamoDBv2;
 using Amazon.DynamoDBv2.Model;
+using Amazon.Runtime;
 using System.Text.Json;
 
 public class DynamoDBService
@@ -59,6 +60,8 @@ public class DynamoDBService
     {
         try
         {
+            Console.WriteLine($"[DYNAMODB] Attempting to save user {usage.UserId} to table {UserUsageTable}");
+            
             var item = new Dictionary<string, AttributeValue>
             {
                 { "UserId", new AttributeValue { S = usage.UserId } },
@@ -72,23 +75,34 @@ public class DynamoDBService
                 item["PremiumExpiresAt"] = new AttributeValue { S = usage.PremiumExpiresAt.Value.ToString("O") };
             }
 
-            await _dynamoDbClient.PutItemAsync(new PutItemRequest
+            var request = new PutItemRequest
             {
                 TableName = UserUsageTable,
                 Item = item
-            });
+            };
             
-            Console.WriteLine($"[DYNAMODB] Successfully saved user {usage.UserId} to table {UserUsageTable}");
+            Console.WriteLine($"[DYNAMODB] PutItem request prepared for user {usage.UserId}");
+            await _dynamoDbClient.PutItemAsync(request);
+            
+            Console.WriteLine($"[DYNAMODB] ✅ Successfully saved user {usage.UserId} to table {UserUsageTable}");
         }
         catch (Amazon.DynamoDBv2.Model.ResourceNotFoundException ex)
         {
-            Console.WriteLine($"[DYNAMODB] ERROR: Table {UserUsageTable} does not exist: {ex.Message}");
+            Console.WriteLine($"[DYNAMODB] ❌ ERROR: Table {UserUsageTable} does not exist: {ex.Message}");
             Console.WriteLine($"[DYNAMODB] Please create the table in AWS Console with primary key: UserId (String)");
+            throw; // Re-throw so caller knows save failed
+        }
+        catch (AmazonServiceException ex)
+        {
+            Console.WriteLine($"[DYNAMODB] ❌ AWS Service Exception saving user {usage.UserId}: {ex.Message}");
+            Console.WriteLine($"[DYNAMODB] Error Code: {ex.ErrorCode}, Status Code: {ex.StatusCode}");
+            Console.WriteLine($"[DYNAMODB] Stack trace: {ex.StackTrace}");
             throw; // Re-throw so caller knows save failed
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[DYNAMODB] Error saving user usage for {usage.UserId}: {ex.Message}");
+            Console.WriteLine($"[DYNAMODB] ❌ General Exception saving user {usage.UserId}: {ex.Message}");
+            Console.WriteLine($"[DYNAMODB] Exception Type: {ex.GetType().FullName}");
             Console.WriteLine($"[DYNAMODB] Stack trace: {ex.StackTrace}");
             throw; // Re-throw so caller knows save failed
         }
@@ -164,16 +178,16 @@ public class DynamoDBService
         try
         {
             var eventId = $"{entry.UserId}_{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}_{Guid.NewGuid().ToString("N")[..8]}";
-            var timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            var timestampString = entry.Timestamp.ToString("O"); // ISO 8601 format
             
             var item = new Dictionary<string, AttributeValue>
             {
                 { "EventId", new AttributeValue { S = eventId } },
-                { "Timestamp", new AttributeValue { N = timestamp.ToString() } },
+                { "Timestamp", new AttributeValue { S = timestampString } }, // Changed to String type
                 { "UserId", new AttributeValue { S = entry.UserId } },
                 { "Action", new AttributeValue { S = entry.Action } },
                 { "Details", new AttributeValue { S = entry.Details } },
-                { "TimestampDate", new AttributeValue { S = entry.Timestamp.ToString("O") } }
+                { "TimestampDate", new AttributeValue { S = timestampString } } // Use same value
             };
 
             await _dynamoDbClient.PutItemAsync(new PutItemRequest
@@ -199,16 +213,28 @@ public class DynamoDBService
             });
 
             return response.Items
-                .OrderByDescending(item => long.Parse(item["Timestamp"].N))
+                .OrderByDescending(item => 
+                {
+                    // Handle both String and Number types for backward compatibility
+                    if (item["Timestamp"].S != null)
+                        return DateTime.Parse(item["Timestamp"].S);
+                    else if (item["Timestamp"].N != null)
+                        return DateTimeOffset.FromUnixTimeMilliseconds(long.Parse(item["Timestamp"].N)).DateTime;
+                    else if (item.ContainsKey("TimestampDate"))
+                        return DateTime.Parse(item["TimestampDate"].S);
+                    return DateTime.MinValue;
+                })
                 .Take(limit)
                 .Select(item => new ActivityLogEntry
                 {
                     UserId = item["UserId"].S,
                     Action = item["Action"].S,
                     Details = item["Details"].S,
-                    Timestamp = item.ContainsKey("TimestampDate") 
-                        ? DateTime.Parse(item["TimestampDate"].S) 
-                        : DateTimeOffset.FromUnixTimeMilliseconds(long.Parse(item["Timestamp"].N)).DateTime
+                    Timestamp = item["Timestamp"].S != null
+                        ? DateTime.Parse(item["Timestamp"].S)
+                        : (item.ContainsKey("TimestampDate") 
+                            ? DateTime.Parse(item["TimestampDate"].S) 
+                            : DateTimeOffset.FromUnixTimeMilliseconds(long.Parse(item["Timestamp"].N)).DateTime)
                 }).ToList();
         }
         catch (Exception ex)

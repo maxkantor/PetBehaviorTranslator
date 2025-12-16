@@ -99,9 +99,48 @@ var stripeSecretKey = await secretsService.GetSecretOrEnvAsync("STRIPE_SECRET_KE
 var stripeWebhookSecret = await secretsService.GetSecretOrEnvAsync("STRIPE_WEBHOOK_SECRET", "STRIPE_WEBHOOK_SECRET", string.Empty);
 var frontendUrl = await secretsService.GetSecretOrEnvAsync("FRONTEND_URL", "FRONTEND_URL", "https://www.petbehaviortranslator.com");
 
+// Initialize Stripe with API key if available
+if (!string.IsNullOrWhiteSpace(stripeSecretKey))
+{
+    StripeConfiguration.ApiKey = stripeSecretKey;
+    Console.WriteLine($"[STRIPE] ✅ Stripe initialized with API key (key starts with: {stripeSecretKey.Substring(0, Math.Min(7, stripeSecretKey.Length))}...)");
+    
+    // Log if it's test or live key
+    if (stripeSecretKey.StartsWith("sk_test_"))
+    {
+        Console.WriteLine("[STRIPE] ⚠️ WARNING: Using TEST mode key (sk_test_)");
+    }
+    else if (stripeSecretKey.StartsWith("sk_live_"))
+    {
+        Console.WriteLine("[STRIPE] ✅ Using PRODUCTION mode key (sk_live_)");
+    }
+}
+else
+{
+    Console.WriteLine("[STRIPE] ❌ Stripe secret key not found - will use mock/demo mode");
+}
+
 // Get Analytics configuration
-var gaMeasurementId = await secretsService.GetSecretOrEnvAsync("GA_MEASUREMENT_ID", "GA_MEASUREMENT_ID", string.Empty);
-var mixpanelToken = await secretsService.GetSecretOrEnvAsync("MIXPANEL_TOKEN", "MIXPANEL_TOKEN", string.Empty);
+// Check for secrets as they exist in AWS Secrets Manager (with VITE_ prefix)
+// Also check for typo version (VITE_GA_MEASURMENT) and correct versions
+// Try multiple possible secret names in order of likelihood
+string gaMeasurementId = string.Empty;
+var gaKeys = new[] { "VITE_GA_MEASURMENT", "VITE_GA_MEASUREMENT_ID", "GA_MEASUREMENT_ID" };
+foreach (var key in gaKeys)
+{
+    gaMeasurementId = await secretsService.GetSecretOrEnvAsync(key, key, string.Empty);
+    if (!string.IsNullOrWhiteSpace(gaMeasurementId))
+        break;
+}
+
+string mixpanelToken = string.Empty;
+var mixpanelKeys = new[] { "VITE_MIXPANEL_TOKEN", "MIXPANEL_TOKEN" };
+foreach (var key in mixpanelKeys)
+{
+    mixpanelToken = await secretsService.GetSecretOrEnvAsync(key, key, string.Empty);
+    if (!string.IsNullOrWhiteSpace(mixpanelToken))
+        break;
+}
 
 // Get Admin configuration
 var adminUserId = await secretsService.GetSecretOrEnvAsync("ADMIN_USER_ID", "ADMIN_USER_ID", string.Empty);
@@ -250,23 +289,38 @@ var activityLog = new List<ActivityLogEntry>();
 // Helper function to get user usage (try DynamoDB first, fallback to in-memory)
 async Task<UserUsage?> GetUserUsageAsync(string userId)
 {
+    Console.WriteLine($"[USER] Getting user usage for {userId}");
+    
     try
     {
         var usage = await dynamoDBService.GetUserUsageAsync(userId);
         if (usage != null)
         {
+            Console.WriteLine($"[USER] ✅ Found user {userId} in DynamoDB");
             // Sync to in-memory for quick access
             usageTracker[userId] = usage;
             return usage;
         }
+        else
+        {
+            Console.WriteLine($"[USER] User {userId} not found in DynamoDB");
+        }
     }
     catch (Exception ex)
     {
-        Console.WriteLine($"[DYNAMODB] Error getting user usage from DynamoDB, falling back to in-memory: {ex.Message}");
+        Console.WriteLine($"[USER] ❌ Error getting user usage from DynamoDB: {ex.Message}");
+        Console.WriteLine($"[USER] Exception type: {ex.GetType().Name}");
     }
     
     // Fallback to in-memory
-    return usageTracker.ContainsKey(userId) ? usageTracker[userId] : null;
+    if (usageTracker.ContainsKey(userId))
+    {
+        Console.WriteLine($"[USER] Found user {userId} in in-memory cache");
+        return usageTracker[userId];
+    }
+    
+    Console.WriteLine($"[USER] User {userId} not found in DynamoDB or in-memory cache");
+    return null;
 }
 
 // Helper function to save user usage (save to both DynamoDB and in-memory)
@@ -429,10 +483,19 @@ async Task<(bool isValid, string? userId)> ValidateAdminSessionAsync(HttpContext
 {
     // Try to get token from Authorization header
     var authHeader = context.Request.Headers["Authorization"].ToString();
-    if (string.IsNullOrWhiteSpace(authHeader))
+    var hasAuthHeader = !string.IsNullOrWhiteSpace(authHeader);
+    
+    if (!hasAuthHeader)
     {
         // Also try X-Admin-Session-Token header
         authHeader = context.Request.Headers["X-Admin-Session-Token"].ToString();
+        hasAuthHeader = !string.IsNullOrWhiteSpace(authHeader);
+    }
+    
+    if (!hasAuthHeader)
+    {
+        Console.WriteLine("[ADMIN SESSION] No Authorization or X-Admin-Session-Token header found");
+        return (false, null);
     }
     
     // Remove "Bearer " prefix if present
@@ -442,6 +505,7 @@ async Task<(bool isValid, string? userId)> ValidateAdminSessionAsync(HttpContext
     
     if (string.IsNullOrWhiteSpace(token))
     {
+        Console.WriteLine("[ADMIN SESSION] Token is empty after processing header");
         return (false, null);
     }
     
@@ -460,7 +524,7 @@ async Task<(bool isValid, string? userId)> ValidateAdminSessionAsync(HttpContext
         return (false, null);
     }
     
-    Console.WriteLine($"[ADMIN SESSION] Valid admin session for user: {payload.UserId}");
+    Console.WriteLine($"[ADMIN SESSION] ✅ Valid admin session for user: {payload.UserId}");
     return (true, payload.UserId);
 }
 
@@ -613,10 +677,22 @@ app.MapPost("/api/premium/status", async (PremiumStatusRequest request) =>
 // Admin endpoint - Set any user to premium/admin - ADMIN ONLY
 app.MapPost("/api/admin/set-premium/{userId}", async (string userId, HttpContext context) =>
 {
-    var adminUserId = context.Request.Query["adminUserId"].ToString();
-    if (!IsAdmin(adminUserId))
+    // First try to validate admin session from token
+    var (isValidSession, sessionUserId) = await ValidateAdminSessionAsync(context);
+    
+    string adminUserId;
+    if (isValidSession && !string.IsNullOrWhiteSpace(sessionUserId))
     {
-        return Results.Unauthorized();
+        adminUserId = sessionUserId;
+    }
+    else
+    {
+        // Fallback to query parameter and check IsAdmin
+        adminUserId = context.Request.Query["adminUserId"].ToString();
+        if (!IsAdmin(adminUserId))
+        {
+            return Results.Unauthorized();
+        }
     }
     
     if (string.IsNullOrWhiteSpace(userId))
@@ -650,10 +726,22 @@ app.MapPost("/api/admin/set-premium/{userId}", async (string userId, HttpContext
 // Admin endpoint - Remove premium status (revert to normal user) - ADMIN ONLY
 app.MapPost("/api/admin/remove-premium/{userId}", async (string userId, HttpContext context) =>
 {
-    var adminUserId = context.Request.Query["adminUserId"].ToString();
-    if (!IsAdmin(adminUserId))
+    // First try to validate admin session from token
+    var (isValidSession, sessionUserId) = await ValidateAdminSessionAsync(context);
+    
+    string adminUserId;
+    if (isValidSession && !string.IsNullOrWhiteSpace(sessionUserId))
     {
-        return Results.Unauthorized();
+        adminUserId = sessionUserId;
+    }
+    else
+    {
+        // Fallback to query parameter and check IsAdmin
+        adminUserId = context.Request.Query["adminUserId"].ToString();
+        if (!IsAdmin(adminUserId))
+        {
+            return Results.Unauthorized();
+        }
     }
     
     if (string.IsNullOrWhiteSpace(userId))
@@ -773,6 +861,88 @@ app.MapGet("/api/admin/users", async (HttpContext context) =>
 .WithName("GetAllUsers")
 .WithOpenApi();
 
+// Admin diagnostic endpoint - Test user save (ADMIN ONLY)
+app.MapPost("/api/admin/test-save-user", async (HttpContext context) =>
+{
+    // First try to validate admin session from token
+    var (isValidSession, sessionUserId) = await ValidateAdminSessionAsync(context);
+    
+    if (!isValidSession)
+    {
+        // Fallback to checking admin status via userId/email
+        var userId = context.Request.Query["userId"].ToString();
+        var email = context.Request.Query["email"].ToString();
+        
+        if (string.IsNullOrWhiteSpace(userId) || !await IsAdminAsync(userId, email))
+        {
+            return Results.Unauthorized();
+        }
+    }
+    
+    var testUserId = context.Request.Query["testUserId"].ToString();
+    if (string.IsNullOrWhiteSpace(testUserId))
+    {
+        testUserId = $"test_user_{DateTimeOffset.UtcNow.ToUnixTimeSeconds()}";
+    }
+    
+    try
+    {
+        Console.WriteLine($"[DIAGNOSTIC] Testing user save for {testUserId}");
+        
+        var testUser = new UserUsage 
+        { 
+            UserId = testUserId,
+            DailyCount = 0,
+            IsPremium = false,
+            LastResetDate = DateTime.UtcNow.Date
+        };
+        
+        await SaveUserUsageAsync(testUser);
+        
+        // Verify it was saved
+        var savedUser = await GetUserUsageAsync(testUserId);
+        
+        if (savedUser != null)
+        {
+            return Results.Ok(new 
+            { 
+                success = true,
+                message = $"Test user {testUserId} saved and retrieved successfully",
+                userId = testUserId,
+                saved = true,
+                retrieved = true
+            });
+        }
+        else
+        {
+            return Results.Ok(new 
+            { 
+                success = false,
+                message = $"Test user {testUserId} save appeared to succeed but could not be retrieved",
+                userId = testUserId,
+                saved = true,
+                retrieved = false
+            });
+        }
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"[DIAGNOSTIC] ❌ Error testing user save: {ex.Message}");
+        Console.WriteLine($"[DIAGNOSTIC] Exception type: {ex.GetType().Name}");
+        Console.WriteLine($"[DIAGNOSTIC] Stack trace: {ex.StackTrace}");
+        
+        return Results.Json(new 
+        { 
+            success = false,
+            message = $"Failed to save test user: {ex.Message}",
+            exceptionType = ex.GetType().Name,
+            stackTrace = ex.StackTrace
+        }, statusCode: 500);
+    }
+})
+.WithName("TestSaveUser")
+.WithOpenApi();
+
 // Admin endpoint - Get activity log - ADMIN ONLY
 app.MapGet("/api/admin/activities", async (HttpContext context) =>
 {
@@ -833,12 +1003,24 @@ app.MapGet("/api/admin/activities", async (HttpContext context) =>
 // Admin endpoint - Reset user activities - ADMIN ONLY
 app.MapPost("/api/admin/reset-user/{targetUserId}", async (string targetUserId, HttpContext context) =>
 {
-    var adminUserId = context.Request.Query["adminUserId"].ToString();
-    var email = context.Request.Query["email"].ToString();
-    var isAdmin = await IsAdminAsync(adminUserId, email);
-    if (!isAdmin)
+    // First try to validate admin session from token
+    var (isValidSession, sessionUserId) = await ValidateAdminSessionAsync(context);
+    
+    string adminUserId;
+    if (isValidSession && !string.IsNullOrWhiteSpace(sessionUserId))
     {
-        return Results.Json(new { message = "Admin access required" }, statusCode: 401);
+        adminUserId = sessionUserId;
+    }
+    else
+    {
+        // Fallback to query parameter and check IsAdmin
+        adminUserId = context.Request.Query["adminUserId"].ToString();
+        var email = context.Request.Query["email"].ToString();
+        var isAdmin = await IsAdminAsync(adminUserId, email);
+        if (!isAdmin)
+        {
+            return Results.Json(new { message = "Admin access required" }, statusCode: 401);
+        }
     }
     
     if (string.IsNullOrWhiteSpace(targetUserId))
@@ -871,12 +1053,24 @@ app.MapPost("/api/admin/reset-user/{targetUserId}", async (string targetUserId, 
 // Admin endpoint - Reset all activities - ADMIN ONLY
 app.MapPost("/api/admin/reset-all", async (HttpContext context) =>
 {
-    var adminUserId = context.Request.Query["adminUserId"].ToString();
-    var email = context.Request.Query["email"].ToString();
-    var isAdmin = await IsAdminAsync(adminUserId, email);
-    if (!isAdmin)
+    // First try to validate admin session from token
+    var (isValidSession, sessionUserId) = await ValidateAdminSessionAsync(context);
+    
+    string adminUserId;
+    if (isValidSession && !string.IsNullOrWhiteSpace(sessionUserId))
     {
-        return Results.Json(new { message = "Admin access required" }, statusCode: 401);
+        adminUserId = sessionUserId;
+    }
+    else
+    {
+        // Fallback to query parameter and check IsAdmin
+        adminUserId = context.Request.Query["adminUserId"].ToString();
+        var email = context.Request.Query["email"].ToString();
+        var isAdmin = await IsAdminAsync(adminUserId, email);
+        if (!isAdmin)
+        {
+            return Results.Json(new { message = "Admin access required" }, statusCode: 401);
+        }
     }
     
     var allUsers = await GetAllUsersAsync();
@@ -902,10 +1096,22 @@ app.MapPost("/api/admin/reset-all", async (HttpContext context) =>
 // Admin endpoint - Set premium status with specific plan - ADMIN ONLY
 app.MapPost("/api/admin/set-premium-plan/{userId}", async (string userId, PremiumPlanRequest request, HttpContext context) =>
 {
-    var adminUserId = context.Request.Query["adminUserId"].ToString();
-    if (!IsAdmin(adminUserId))
+    // First try to validate admin session from token
+    var (isValidSession, sessionUserId) = await ValidateAdminSessionAsync(context);
+    
+    string adminUserId;
+    if (isValidSession && !string.IsNullOrWhiteSpace(sessionUserId))
     {
-        return Results.Unauthorized();
+        adminUserId = sessionUserId;
+    }
+    else
+    {
+        // Fallback to query parameter and check IsAdmin
+        adminUserId = context.Request.Query["adminUserId"].ToString();
+        if (!IsAdmin(adminUserId))
+        {
+            return Results.Unauthorized();
+        }
     }
     
     if (string.IsNullOrWhiteSpace(userId))
@@ -1013,9 +1219,20 @@ app.MapPost("/api/admin/grant-credits/{userId}", async (string userId, GrantCred
     if (usage == null)
     {
         usage = new UserUsage { UserId = userId };
+        Console.WriteLine($"[ADMIN] Creating new user entry for {userId} when granting credits");
     }
     // Note: UserUsage doesn't store credits (that's in the token), but we save to ensure user appears in admin
-    await SaveUserUsageAsync(usage);
+    try
+    {
+        await SaveUserUsageAsync(usage);
+        Console.WriteLine($"[ADMIN] ✅ Saved user {userId} to DynamoDB after granting credits");
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"[ADMIN] ❌ WARNING: Failed to save user to DynamoDB after granting credits: {ex.Message}");
+        Console.WriteLine($"[ADMIN] Exception type: {ex.GetType().Name}");
+        // Continue anyway - credit granting still succeeded
+    }
     
     await LogActivityAsync(adminUserId, "GRANT_CREDITS", $"Granted {request.Credits} credits to user {userId}");
     
@@ -1289,13 +1506,31 @@ app.MapGet("/api/admin/dashboard", async (HttpContext context) =>
 // POST /admin/config - Update admin configuration
 app.MapPost("/api/admin/config", async (AdminConfigUpdateRequest request, HttpContext context) =>
 {
-    var userId = context.Request.Query["adminUserId"].ToString();
-    var email = context.Request.Query["email"].ToString();
+    // First try to validate admin session from token
+    var (isValidSession, sessionUserId) = await ValidateAdminSessionAsync(context);
     
-    var isAdmin = await IsAdminAsync(userId, email);
-    if (!isAdmin)
+    string userId;
+    string email;
+    if (isValidSession && !string.IsNullOrWhiteSpace(sessionUserId))
     {
-        return Results.Json(new { message = "Admin access required" }, statusCode: 401);
+        userId = sessionUserId;
+        // Email is optional when we have a valid admin session
+        email = context.Request.Query["email"].ToString();
+        if (string.IsNullOrWhiteSpace(email))
+        {
+            email = "admin_session"; // Default for logging when email not provided
+        }
+    }
+    else
+    {
+        // Fallback to query parameter and check IsAdmin
+        userId = context.Request.Query["adminUserId"].ToString();
+        email = context.Request.Query["email"].ToString();
+        var isAdmin = await IsAdminAsync(userId, email);
+        if (!isAdmin)
+        {
+            return Results.Json(new { message = "Admin access required" }, statusCode: 401);
+        }
     }
 
     // Get current config
@@ -1427,13 +1662,24 @@ app.MapPost("/api/admin/set-my-credits", async (SetMyCreditsRequest request, Htt
 // GET /admin/user-credits/{userId} - Get user credit balance and token info (ADMIN ONLY)
 app.MapGet("/api/admin/user-credits/{userId}", async (string userId, HttpContext context) =>
 {
-    var adminUserId = context.Request.Query["adminUserId"].ToString();
-    var adminEmail = context.Request.Query["email"].ToString();
+    // First try to validate admin session from token
+    var (isValidSession, sessionUserId) = await ValidateAdminSessionAsync(context);
     
-    var isAdmin = await IsAdminAsync(adminUserId, adminEmail);
-    if (!isAdmin)
+    string adminUserId;
+    if (isValidSession && !string.IsNullOrWhiteSpace(sessionUserId))
     {
-        return Results.Json(new { message = "Admin access required" }, statusCode: 401);
+        adminUserId = sessionUserId;
+    }
+    else
+    {
+        // Fallback to query parameter and check IsAdmin
+        adminUserId = context.Request.Query["adminUserId"].ToString();
+        var adminEmail = context.Request.Query["email"].ToString();
+        var isAdmin = await IsAdminAsync(adminUserId, adminEmail);
+        if (!isAdmin)
+        {
+            return Results.Json(new { message = "Admin access required" }, statusCode: 401);
+        }
     }
     
     if (string.IsNullOrWhiteSpace(userId))
@@ -1472,7 +1718,12 @@ app.MapPost("/api/admin/set-user-credits/{userId}", async (string userId, SetUse
     if (isValidSession && !string.IsNullOrWhiteSpace(sessionUserId))
     {
         adminUserId = sessionUserId;
-        adminEmail = context.Request.Query["email"].ToString(); // Still get email from query if needed
+        // Email is optional when we have a valid admin session
+        adminEmail = context.Request.Query["email"].ToString();
+        if (string.IsNullOrWhiteSpace(adminEmail))
+        {
+            adminEmail = "admin_session"; // Default for logging when email not provided
+        }
     }
     else
     {
@@ -1520,8 +1771,12 @@ app.MapPost("/api/admin/set-user-credits/{userId}", async (string userId, SetUse
     else
     {
         // Update existing token with new credit amount
+        // Preserve existing FreeSearchesUsed and IssuedAt to maintain user history
         payload.CreditsRemaining = request.Credits;
-        payload.FreeSearchesUsed = 0; // Reset free searches
+        // Don't reset FreeSearchesUsed - preserve user's search history
+        // payload.FreeSearchesUsed remains unchanged
+        // Preserve IssuedAt timestamp (already in payload)
+        
         // Clear admin override if setting to 0 credits (to remove unlimited status)
         // Also clear IsAdmin flag so they consume credits like regular users
         if (request.Credits == 0)
@@ -1544,9 +1799,20 @@ app.MapPost("/api/admin/set-user-credits/{userId}", async (string userId, SetUse
     if (usage == null)
     {
         usage = new UserUsage { UserId = userId };
+        Console.WriteLine($"[ADMIN] Creating new user entry for {userId} when setting credits");
     }
     // Note: UserUsage doesn't store credits (that's in the token), but we save to ensure user appears in admin
-    await SaveUserUsageAsync(usage);
+    try
+    {
+        await SaveUserUsageAsync(usage);
+        Console.WriteLine($"[ADMIN] ✅ Saved user {userId} to DynamoDB after setting credits");
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"[ADMIN] ❌ WARNING: Failed to save user to DynamoDB after setting credits: {ex.Message}");
+        Console.WriteLine($"[ADMIN] Exception type: {ex.GetType().Name}");
+        // Continue anyway - credit setting still succeeded
+    }
     
     await LogActivityAsync(adminUserId, "SET_USER_CREDITS", $"Admin {adminUserId} set user {userId} credits to {request.Credits}");
     
@@ -1574,13 +1840,31 @@ app.MapPost("/api/admin/set-user-credits/{userId}", async (string userId, SetUse
 // POST /admin/override-token - Create override token for a user
 app.MapPost("/api/admin/override-token", async (AdminOverrideTokenRequest request, HttpContext context) =>
 {
-    var adminUserId = context.Request.Query["adminUserId"].ToString();
-    var adminEmail = context.Request.Query["email"].ToString();
+    // First try to validate admin session from token
+    var (isValidSession, sessionUserId) = await ValidateAdminSessionAsync(context);
     
-    var isAdmin = await IsAdminAsync(adminUserId, adminEmail);
-    if (!isAdmin)
+    string adminUserId;
+    string adminEmail;
+    if (isValidSession && !string.IsNullOrWhiteSpace(sessionUserId))
     {
-        return Results.Json(new { message = "Admin access required" }, statusCode: 401);
+        adminUserId = sessionUserId;
+        // Email is optional when we have a valid admin session
+        adminEmail = context.Request.Query["email"].ToString();
+        if (string.IsNullOrWhiteSpace(adminEmail))
+        {
+            adminEmail = "admin_session"; // Default for logging when email not provided
+        }
+    }
+    else
+    {
+        // Fallback to query parameter and check IsAdmin
+        adminUserId = context.Request.Query["adminUserId"].ToString();
+        adminEmail = context.Request.Query["email"].ToString();
+        var isAdmin = await IsAdminAsync(adminUserId, adminEmail);
+        if (!isAdmin)
+        {
+            return Results.Json(new { message = "Admin access required" }, statusCode: 401);
+        }
     }
 
     if (string.IsNullOrWhiteSpace(request.TargetUserId) && string.IsNullOrWhiteSpace(request.TargetEmail))
@@ -2191,7 +2475,18 @@ app.MapPost("/api/credits/get-token", async (GetTokenRequest request) =>
     if (usage == null)
     {
         usage = new UserUsage { UserId = request.UserId };
-        await SaveUserUsageAsync(usage);
+        try
+        {
+            await SaveUserUsageAsync(usage);
+            Console.WriteLine($"[USER] ✅ Created new user entry for {request.UserId}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[USER] ❌ WARNING: Failed to save user to DynamoDB: {ex.Message}");
+            Console.WriteLine($"[USER] ❌ Exception type: {ex.GetType().Name}");
+            Console.WriteLine($"[USER] ❌ Stack trace: {ex.StackTrace}");
+            // Continue anyway - user can still get token, just won't appear in admin dashboard
+        }
     }
 
     // Check if user is admin
@@ -2438,10 +2733,35 @@ app.MapPost("/api/credits/complete-purchase", async (CompletePurchaseRequest req
                                 }
                                 var newToken = tokenService.UpdateToken(payload);
                                 
+                                // Ensure user is saved to DynamoDB (so they appear in admin dashboard)
+                                var userIdForSave = userId ?? payload.UserId;
+                                var usageStripe = await GetUserUsageAsync(userIdForSave);
+                                if (usageStripe == null)
+                                {
+                                    usageStripe = new UserUsage { UserId = userIdForSave };
+                                    Console.WriteLine($"[USER] Creating new user entry for {userIdForSave} after Stripe purchase");
+                                }
+                                else
+                                {
+                                    Console.WriteLine($"[USER] Updating existing user entry for {userIdForSave} after Stripe purchase");
+                                }
+                                try
+                                {
+                                    await SaveUserUsageAsync(usageStripe);
+                                    Console.WriteLine($"[USER] ✅ Saved/updated user {userIdForSave} to DynamoDB after Stripe purchase");
+                                }
+                                catch (Exception ex)
+                                {
+                                    Console.WriteLine($"[USER] ❌ WARNING: Failed to save user to DynamoDB after Stripe purchase: {ex.Message}");
+                                    Console.WriteLine($"[USER] ❌ Exception type: {ex.GetType().Name}");
+                                    Console.WriteLine($"[USER] ❌ Stack trace: {ex.StackTrace}");
+                                    // Continue anyway - purchase still succeeded
+                                }
+                                
                                 await eventLogService.LogEventAsync(new EventLogEntry
                                 {
                                     EventType = "PURCHASE",
-                                    UserId = userId ?? payload.UserId,
+                                    UserId = userIdForSave,
                                     Status = "SUCCESS",
                                     Details = $"Stripe session completed: Purchased {tier.Credits} credits from tier {tier.Name}, session={session.Id}"
                                 });
@@ -2504,6 +2824,30 @@ app.MapPost("/api/credits/complete-purchase", async (CompletePurchaseRequest req
         payloadRegular.IsAdminOverride = false;
     }
     var newTokenRegular = tokenService.UpdateToken(payloadRegular);
+
+    // Ensure user is saved to DynamoDB (so they appear in admin dashboard)
+    var usage = await GetUserUsageAsync(payloadRegular.UserId);
+    if (usage == null)
+    {
+        usage = new UserUsage { UserId = payloadRegular.UserId };
+        Console.WriteLine($"[USER] Creating new user entry for {payloadRegular.UserId} after purchase");
+    }
+    else
+    {
+        Console.WriteLine($"[USER] Updating existing user entry for {payloadRegular.UserId} after purchase");
+    }
+    try
+    {
+        await SaveUserUsageAsync(usage);
+        Console.WriteLine($"[USER] ✅ Saved/updated user {payloadRegular.UserId} to DynamoDB after purchase");
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"[USER] ❌ WARNING: Failed to save user to DynamoDB after purchase: {ex.Message}");
+        Console.WriteLine($"[USER] ❌ Exception type: {ex.GetType().Name}");
+        Console.WriteLine($"[USER] ❌ Stack trace: {ex.StackTrace}");
+        // Continue anyway - purchase still succeeded
+    }
 
     await eventLogService.LogEventAsync(new EventLogEntry
     {
