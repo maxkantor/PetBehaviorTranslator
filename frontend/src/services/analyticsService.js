@@ -4,6 +4,7 @@
 // These will be loaded from the backend API
 let GA_MEASUREMENT_ID = import.meta.env.VITE_GA_MEASUREMENT_ID || ''
 let MIXPANEL_TOKEN = import.meta.env.VITE_MIXPANEL_TOKEN || ''
+let MIXPANEL_INITIALIZED = false // Track if Mixpanel has been successfully initialized
 
 // Load analytics config from backend API
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001'
@@ -81,26 +82,40 @@ export const initMixpanel = () => {
   script.src = 'https://cdn.mxpnl.com/libs/mixpanel-2-latest.min.js'
   
   script.onload = () => {
-    // Wait a bit for Mixpanel to be fully available
-    setTimeout(() => {
-      if (window.mixpanel) {
+    // Poll for Mixpanel to be available (it may take a moment to initialize)
+    let attempts = 0
+    const maxAttempts = 20 // Try for up to 2 seconds (20 * 100ms)
+    
+    const checkMixpanel = setInterval(() => {
+      attempts++
+      
+      // Check multiple ways Mixpanel might be available
+      const mixpanel = window.mixpanel || (window.mixpanel && window.mixpanel.mixpanel)
+      
+      if (mixpanel && typeof mixpanel.init === 'function') {
+        clearInterval(checkMixpanel)
         try {
-          window.mixpanel.init(MIXPANEL_TOKEN, {
+          mixpanel.init(MIXPANEL_TOKEN, {
             track_pageview: true,
             persistence: 'localStorage'
           })
+          MIXPANEL_INITIALIZED = true
           console.log('Mixpanel initialized successfully')
         } catch (error) {
-          console.error('Error initializing Mixpanel:', error)
+          console.warn('Error initializing Mixpanel:', error)
+          MIXPANEL_INITIALIZED = false
         }
-      } else {
-        console.error('Mixpanel script loaded but window.mixpanel is not available')
+      } else if (attempts >= maxAttempts) {
+        clearInterval(checkMixpanel)
+        // Silently fail - Mixpanel may be blocked by ad blocker or not available
+        MIXPANEL_INITIALIZED = false
       }
     }, 100)
   }
   
   script.onerror = () => {
-    console.error('Failed to load Mixpanel script')
+    console.warn('Failed to load Mixpanel script - analytics will be disabled')
+    // Don't throw error - just log warning
   }
   
   document.head.appendChild(script)
@@ -116,15 +131,15 @@ export const trackPageView = (pageName, pagePath) => {
     })
   }
 
-  // Mixpanel
-  if (window.mixpanel && MIXPANEL_TOKEN && typeof window.mixpanel.track === 'function') {
+  // Mixpanel - only use if properly initialized
+  if (MIXPANEL_INITIALIZED && window.mixpanel && typeof window.mixpanel.track === 'function') {
     try {
       window.mixpanel.track('Page View', {
         page_name: pageName,
         page_path: pagePath || window.location.pathname
       })
     } catch (error) {
-      console.warn('Mixpanel track error:', error)
+      // Silently fail
     }
   }
 }
@@ -149,8 +164,8 @@ export const trackTranslation = (userId, behaviorLength, hasCredits, isFreeSearc
     })
   }
 
-  // Mixpanel
-  if (window.mixpanel && MIXPANEL_TOKEN && typeof window.mixpanel.track === 'function') {
+  // Mixpanel - only use if properly initialized
+  if (MIXPANEL_INITIALIZED && window.mixpanel && typeof window.mixpanel.track === 'function') {
     try {
       window.mixpanel.track('Translation', eventData)
       if (window.mixpanel.people && typeof window.mixpanel.people.set === 'function') {
@@ -160,7 +175,7 @@ export const trackTranslation = (userId, behaviorLength, hasCredits, isFreeSearc
         })
       }
     } catch (error) {
-      console.warn('Mixpanel track error:', error)
+      // Silently fail
     }
   }
 }
@@ -193,8 +208,8 @@ export const trackCreditPurchase = (userId, tierId, tierName, price, credits) =>
     })
   }
 
-  // Mixpanel
-  if (window.mixpanel && MIXPANEL_TOKEN && typeof window.mixpanel.track === 'function') {
+  // Mixpanel - only use if properly initialized
+  if (MIXPANEL_INITIALIZED && window.mixpanel && typeof window.mixpanel.track === 'function') {
     try {
       window.mixpanel.track('Credit Purchase', eventData)
       if (window.mixpanel.people && typeof window.mixpanel.people.increment === 'function') {
@@ -205,7 +220,7 @@ export const trackCreditPurchase = (userId, tierId, tierName, price, credits) =>
         })
       }
     } catch (error) {
-      console.warn('Mixpanel track error:', error)
+      // Silently fail
     }
   }
 }
@@ -236,8 +251,8 @@ export const trackPremiumPurchase = (userId, planId, planName, price) => {
     })
   }
 
-  // Mixpanel
-  if (window.mixpanel && MIXPANEL_TOKEN && typeof window.mixpanel.track === 'function') {
+  // Mixpanel - only use if properly initialized
+  if (MIXPANEL_INITIALIZED && window.mixpanel && typeof window.mixpanel.track === 'function') {
     try {
       window.mixpanel.track('Premium Purchase', eventData)
       if (window.mixpanel.people && typeof window.mixpanel.people.set === 'function') {
@@ -248,7 +263,7 @@ export const trackPremiumPurchase = (userId, planId, planName, price) => {
         })
       }
     } catch (error) {
-      console.warn('Mixpanel track error:', error)
+      // Silently fail
     }
   }
 }
@@ -270,12 +285,12 @@ export const trackCreditLow = (userId, creditsRemaining) => {
     })
   }
 
-  // Mixpanel
-  if (window.mixpanel && MIXPANEL_TOKEN && typeof window.mixpanel.track === 'function') {
+  // Mixpanel - only use if properly initialized
+  if (MIXPANEL_INITIALIZED && window.mixpanel && typeof window.mixpanel.track === 'function') {
     try {
       window.mixpanel.track('Credit Low', eventData)
     } catch (error) {
-      console.warn('Mixpanel track error:', error)
+      // Silently fail
     }
   }
 }
@@ -295,12 +310,12 @@ export const trackOutOfCredits = (userId) => {
     })
   }
 
-  // Mixpanel
-  if (window.mixpanel && MIXPANEL_TOKEN && typeof window.mixpanel.track === 'function') {
+  // Mixpanel - only use if properly initialized
+  if (MIXPANEL_INITIALIZED && window.mixpanel && typeof window.mixpanel.track === 'function') {
     try {
       window.mixpanel.track('Out of Credits', eventData)
     } catch (error) {
-      console.warn('Mixpanel track error:', error)
+      // Silently fail
     }
   }
 }
@@ -324,12 +339,12 @@ export const trackButtonClick = (buttonName, location, userId = null) => {
     })
   }
 
-  // Mixpanel
-  if (window.mixpanel && MIXPANEL_TOKEN && typeof window.mixpanel.track === 'function') {
+  // Mixpanel - only use if properly initialized
+  if (MIXPANEL_INITIALIZED && window.mixpanel && typeof window.mixpanel.track === 'function') {
     try {
       window.mixpanel.track('Button Click', eventData)
     } catch (error) {
-      console.warn('Mixpanel track error:', error)
+      // Silently fail
     }
   }
 }
@@ -344,8 +359,8 @@ export const identifyUser = (userId, email = null, properties = {}) => {
     }
   }
 
-  // Mixpanel
-  if (window.mixpanel && MIXPANEL_TOKEN && typeof window.mixpanel.identify === 'function') {
+  // Mixpanel - only use if properly initialized
+  if (MIXPANEL_INITIALIZED && window.mixpanel && typeof window.mixpanel.identify === 'function') {
     try {
       window.mixpanel.identify(userId)
       if (email && window.mixpanel.people && typeof window.mixpanel.people.set === 'function') {
@@ -355,7 +370,7 @@ export const identifyUser = (userId, email = null, properties = {}) => {
         })
       }
     } catch (error) {
-      console.warn('Mixpanel identify error:', error)
+      // Silently fail
     }
   }
 }
@@ -379,12 +394,12 @@ export const trackFunnelStep = (stepName, stepNumber, userId = null) => {
     })
   }
 
-  // Mixpanel
-  if (window.mixpanel && MIXPANEL_TOKEN && typeof window.mixpanel.track === 'function') {
+  // Mixpanel - only use if properly initialized
+  if (MIXPANEL_INITIALIZED && window.mixpanel && typeof window.mixpanel.track === 'function') {
     try {
       window.mixpanel.track('Funnel Step', eventData)
     } catch (error) {
-      console.warn('Mixpanel track error:', error)
+      // Silently fail
     }
   }
 }
@@ -407,12 +422,12 @@ export const trackError = (errorType, errorMessage, userId = null) => {
     })
   }
 
-  // Mixpanel
-  if (window.mixpanel && MIXPANEL_TOKEN && typeof window.mixpanel.track === 'function') {
+  // Mixpanel - only use if properly initialized
+  if (MIXPANEL_INITIALIZED && window.mixpanel && typeof window.mixpanel.track === 'function') {
     try {
       window.mixpanel.track('Error', eventData)
     } catch (error) {
-      console.warn('Mixpanel track error:', error)
+      // Silently fail
     }
   }
 }
