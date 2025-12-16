@@ -103,6 +103,14 @@
   flex-wrap: wrap;
 }
 
+.creditExplanation {
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.9);
+  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.2);
+  margin: 0;
+  font-weight: 400;
+}
+
 .premiumBadge {
   display: inline-flex;
   align-items: center;
@@ -182,6 +190,27 @@
   box-shadow: 0 0 0 4px rgba(255, 107, 157, 0.2);
 }
 
+.socialProof {
+  margin: 1rem 0;
+  text-align: center;
+  padding: 0.75rem;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+}
+
+.socialProofText {
+  font-size: 0.9rem;
+  color: #666;
+  margin: 0 0 0.25rem 0;
+  font-weight: 600;
+}
+
+.socialProofPets {
+  font-size: 0.85rem;
+  color: #888;
+  margin: 0;
+}
+
 .presets {
   margin: 1.5rem 0;
 }
@@ -258,6 +287,28 @@
 .translateButton:disabled {
   opacity: 0.7;
   cursor: not-allowed;
+}
+
+.howItWorks {
+  margin-top: 1.5rem;
+  padding: 1rem;
+  background: rgba(255, 255, 255, 0.5);
+  border-radius: 8px;
+  border-left: 3px solid #4ecdc4;
+}
+
+.howItWorksTitle {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #333;
+  margin: 0 0 0.5rem 0;
+}
+
+.howItWorksText {
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: #555;
+  margin: 0;
 }
 
 .spinningPaw {
@@ -522,6 +573,27 @@
   box-shadow: 0 8px 24px rgba(78, 205, 196, 0.5);
 }
 
+.supportLinkSecondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1.5rem;
+  background: rgba(255, 255, 255, 0.2);
+  color: rgba(255, 255, 255, 0.9);
+  text-decoration: none;
+  border-radius: 8px;
+  font-weight: 500;
+  font-size: 0.95rem;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  transition: all 0.3s ease;
+}
+
+.supportLinkSecondary:hover {
+  background: rgba(255, 255, 255, 0.3);
+  color: white;
+  transform: translateY(-2px);
+}
+
 .adminLink {
   display: inline-flex;
   align-items: center;
@@ -686,6 +758,41 @@
 
   .madeWith {
     font-size: 0.75rem;
+  }
+
+  .creditExplanation {
+    font-size: 0.75rem;
+  }
+
+  .socialProof {
+    margin: 0.75rem 0;
+    padding: 0.5rem;
+  }
+
+  .socialProofText {
+    font-size: 0.85rem;
+  }
+
+  .socialProofPets {
+    font-size: 0.8rem;
+  }
+
+  .howItWorks {
+    margin-top: 1rem;
+    padding: 0.75rem;
+  }
+
+  .howItWorksTitle {
+    font-size: 0.9rem;
+  }
+
+  .howItWorksText {
+    font-size: 0.85rem;
+  }
+
+  .supportLinkSecondary {
+    padding: 0.6rem 1.2rem;
+    font-size: 0.85rem;
   }
 
   .petImage {

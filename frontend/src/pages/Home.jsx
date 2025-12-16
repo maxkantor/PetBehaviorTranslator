@@ -283,8 +283,8 @@ function Home() {
     <>
       <SEOHead 
         title="AI Pet Behavior Translator 🐾 - Understand Your Pet's Actions"
-        description="AI-powered pet behavior translator that helps you understand your pet's actions and provides actionable solutions. Get instant advice for dog and cat behavior issues."
-        keywords="pet behavior, dog behavior, cat behavior, pet translator, AI pet advice, pet training"
+        description="AI-powered behavior analysis for pets. Get evidence-based insights, actionable solutions, and guidance for dog and cat behavior issues. Trusted by pet owners worldwide."
+        keywords="pet behavior, dog behavior, cat behavior, pet behavior analysis, AI pet advice, pet training"
       />
       <div className={styles.container}>
       {/* Decorative Pet Images - Specific Breeds */}
@@ -374,12 +374,13 @@ function Home() {
           AI Pet Behavior Translator
         </h1>
         <p className={styles.subtitle}>
-          Type what your pet is doing — get instant answers.
+          Get AI-powered behavior analysis and actionable insights for your pet.
         </p>
         
         {/* Credit Balance Display */}
         <div className={styles.usageDisplay}>
           <CreditBalanceIndicator />
+          <p className={styles.creditExplanation}>1 credit = 1 behavior analysis</p>
           {!loadingBalance && !isAdmin && creditBalance.freeSearchesRemaining === 0 && creditBalance.creditsRemaining === 0 && (
             <Link to="/credits" className={styles.upgradeLink}>
               Buy Credits
@@ -397,6 +398,16 @@ function Home() {
             onChange={(e) => setBehavior(e.target.value)}
             rows={6}
           />
+
+          {/* Social Proof */}
+          <div className={styles.socialProof}>
+            <p className={styles.socialProofText}>
+              ⭐ Trusted by pet owners worldwide
+            </p>
+            <p className={styles.socialProofPets}>
+              🐶 Dogs • 🐱 Cats • 🐾 All breeds
+            </p>
+          </div>
 
           <div className={styles.presets}>
             <p className={styles.presetsLabel}>Quick actions:</p>
@@ -422,15 +433,25 @@ function Home() {
             {loading ? (
               <>
                 <FaPaw className={styles.spinningPaw} />
-                Translating...
+                Analyzing...
               </>
             ) : (
               <>
                 <FaPaw />
-                Translate Behavior
+                Analyze My Pet's Behavior
               </>
             )}
           </button>
+
+          {/* How This Works */}
+          <div className={styles.howItWorks}>
+            <h3 className={styles.howItWorksTitle}>How This Works</h3>
+            <p className={styles.howItWorksText}>
+              Our AI analyzes your pet's behavior patterns and provides evidence-based insights, 
+              not literal translation. You'll receive likely causes, quick fixes, step-by-step solutions, 
+              and guidance on when to consult a veterinarian.
+            </p>
+          </div>
         </div>
 
         {error && (
@@ -619,9 +640,9 @@ function Home() {
               <FaCoins />
               Buy Credits
             </Link>
-            <Link to="/support" className={styles.supportLink}>
+            <Link to="/support" className={styles.supportLinkSecondary}>
               <FaHeadset />
-              Contact Support
+              Need Help?
             </Link>
           </div>
 
