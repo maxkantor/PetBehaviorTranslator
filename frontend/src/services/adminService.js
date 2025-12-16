@@ -221,8 +221,21 @@ export const adminLogout = () => {
 // POST /admin/connect - Connect as admin and get admin token
 export const adminConnect = async () => {
   try {
+    // Check if we already have a valid session token
+    const hasValidSession = checkAdminSession()
+    if (hasValidSession) {
+      console.log('Already have valid admin session, skipping adminConnect')
+      return { success: true, message: 'Already connected via session token' }
+    }
+    
     const email = getUserEmail()
     if (!email) {
+      // If no email but we have session token, that's okay - session token is enough
+      const sessionToken = localStorage.getItem('adminSessionToken')
+      if (sessionToken) {
+        console.log('No email but have session token - session token is sufficient')
+        return { success: true, message: 'Using existing session token' }
+      }
       throw new Error('Email is required for admin access. Please set your email first.')
     }
     

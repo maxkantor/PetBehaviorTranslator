@@ -46,15 +46,27 @@ function Home() {
         const adminStatus = await checkAdmin()
         setIsAdmin(adminStatus)
         
-        // If admin, try to connect and get admin token
+        // If admin, check if we have a valid session token
         if (adminStatus) {
-          try {
-            const { adminConnect } = await import('../services/adminService')
-            await adminConnect()
-            // Admin token is now stored, get token with admin flag
+          const { checkAdminSession } = await import('../services/adminService')
+          const hasValidSession = checkAdminSession()
+          
+          if (hasValidSession) {
+            // We have a valid admin session token - no need to call adminConnect
+            // Just get/create regular token
             await getOrCreateToken(userId)
-          } catch (error) {
-            console.error('Error connecting as admin:', error)
+          } else {
+            // No valid session, try to connect (requires email)
+            try {
+              const { adminConnect } = await import('../services/adminService')
+              await adminConnect()
+              // Admin token is now stored, get token with admin flag
+              await getOrCreateToken(userId)
+            } catch (error) {
+              console.warn('Admin connect failed (email may be required):', error.message)
+              // Continue anyway - session token should be enough for basic admin access
+              await getOrCreateToken(userId)
+            }
           }
         } else {
           // Get or create token if needed (non-admin)
