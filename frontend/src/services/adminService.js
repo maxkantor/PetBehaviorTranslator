@@ -36,9 +36,22 @@ const getAdminParams = () => {
 export const checkAdmin = async () => {
   try {
     const userId = getUserId()
-    console.log('Checking admin status for user:', userId)
-    // Use getAdminParams to include session token
-    const response = await axios.get(`${API_URL}/api/admin/check`, getAdminParams())
+    const sessionToken = localStorage.getItem('adminSessionToken')
+    console.log('Checking admin status for user:', userId, 'has session token:', !!sessionToken)
+    
+    // Build request with session token in headers
+    const config = {
+      params: { userId }, // Send userId in params
+      headers: {}
+    }
+    
+    // Include session token if available
+    if (sessionToken) {
+      config.headers['Authorization'] = `Bearer ${sessionToken}`
+      config.headers['X-Admin-Session-Token'] = sessionToken
+    }
+    
+    const response = await axios.get(`${API_URL}/api/admin/check`, config)
     console.log('Admin check response:', response.data)
     return response.data.isAdmin || false
   } catch (error) {
