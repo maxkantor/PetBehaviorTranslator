@@ -132,11 +132,10 @@ export const removePremiumStatus = async (userId) => {
 // Grant credits to a user - ADMIN ONLY
 export const grantCredits = async (userId, credits, existingToken = null) => {
   try {
-    const adminUserId = getUserId()
-    const response = await axios.post(`${API_URL}/api/admin/grant-credits/${userId}?adminUserId=${adminUserId}`, {
+    const response = await axios.post(`${API_URL}/api/admin/grant-credits/${userId}`, {
       credits,
       existingToken
-    })
+    }, getAdminParams())
     return response.data
   } catch (error) {
     console.error('Error granting credits:', error)
