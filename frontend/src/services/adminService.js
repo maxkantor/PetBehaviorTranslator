@@ -37,7 +37,8 @@ export const checkAdmin = async () => {
   try {
     const userId = getUserId()
     console.log('Checking admin status for user:', userId)
-    const response = await axios.get(`${API_URL}/api/admin/check`, { params: { userId } })
+    // Use getAdminParams to include session token
+    const response = await axios.get(`${API_URL}/api/admin/check`, getAdminParams())
     console.log('Admin check response:', response.data)
     return response.data.isAdmin || false
   } catch (error) {
