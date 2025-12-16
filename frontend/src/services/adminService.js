@@ -37,7 +37,21 @@ export const checkAdmin = async () => {
   try {
     const userId = getUserId()
     const sessionToken = localStorage.getItem('adminSessionToken')
-    console.log('Checking admin status for user:', userId, 'has session token:', !!sessionToken)
+    const expiresAt = localStorage.getItem('adminSessionExpiresAt')
+    
+    // Check if session is expired locally first
+    if (sessionToken && expiresAt) {
+      const now = Math.floor(Date.now() / 1000)
+      const expiry = parseInt(expiresAt, 10)
+      if (now >= expiry) {
+        console.log('Admin session expired locally, clearing token')
+        localStorage.removeItem('adminSessionToken')
+        localStorage.removeItem('adminSessionExpiresAt')
+        // Continue to check anyway - backend will handle it
+      }
+    }
+    
+    console.log('Checking admin status for user:', userId, 'has session token:', !!sessionToken, 'expires at:', expiresAt)
     
     // Build request with session token in headers
     const config = {
