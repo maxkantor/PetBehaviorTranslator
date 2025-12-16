@@ -61,9 +61,25 @@ export const initGoogleAnalytics = () => {
 
 // Initialize Mixpanel
 export const initMixpanel = () => {
-  // Strict check - only proceed if token exists and is not empty
-  if (!MIXPANEL_TOKEN || MIXPANEL_TOKEN.trim() === '') {
-    // Absolutely do not load Mixpanel if no token
+  // STRICT check - only proceed if token exists and is not empty
+  // This prevents the script from loading at all if no token
+  const token = MIXPANEL_TOKEN?.trim() || ''
+  if (!token || token === '' || token === 'undefined' || token === 'null') {
+    // Remove any existing Mixpanel scripts if no token
+    const existingScripts = document.querySelectorAll('script[src*="mixpanel"]')
+    existingScripts.forEach(script => script.remove())
+    
+    // Clear Mixpanel from window if it exists
+    if (window.mixpanel) {
+      try {
+        delete window.mixpanel
+      } catch (e) {
+        // Ignore
+      }
+    }
+    
+    MIXPANEL_INITIALIZED = false
+    // Absolutely do not load Mixpanel if no valid token
     return
   }
 
@@ -80,7 +96,7 @@ export const initMixpanel = () => {
       if (window.mixpanel && typeof window.mixpanel.init === 'function') {
         clearInterval(checkExisting)
         try {
-          window.mixpanel.init(MIXPANEL_TOKEN, {
+          window.mixpanel.init(token, {
             track_pageview: true,
             persistence: 'localStorage'
           })
@@ -108,7 +124,7 @@ export const initMixpanel = () => {
       setTimeout(() => {
         if (window.mixpanel && typeof window.mixpanel.init === 'function') {
           try {
-            window.mixpanel.init(MIXPANEL_TOKEN, {
+            window.mixpanel.init(token, {
               track_pageview: true,
               persistence: 'localStorage'
             })
