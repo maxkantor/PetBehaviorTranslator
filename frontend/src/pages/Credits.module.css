@@ -1,5 +1,6 @@
 .container {
   min-height: 100vh;
+  max-height: 100vh;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -9,10 +10,11 @@
     linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   padding: 2rem;
   position: relative;
-  overflow: hidden;
   overflow-x: hidden;
+  overflow-y: auto;
   width: 100%;
   max-width: 100%;
+  box-sizing: border-box;
 }
 
 .petImage {

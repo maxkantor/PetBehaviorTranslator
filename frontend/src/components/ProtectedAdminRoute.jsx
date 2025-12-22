@@ -17,7 +17,8 @@ function ProtectedAdminRoute({ children }) {
   if (loading || isAuthenticated === null) {
     return (
       <div style={{
-        minHeight: '100vh',
+        height: '100vh',
+        maxHeight: '100vh',
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
@@ -27,6 +28,7 @@ function ProtectedAdminRoute({ children }) {
         width: '100%',
         maxWidth: '100%',
         overflowX: 'hidden',
+        overflowY: 'auto',
         boxSizing: 'border-box'
       }}>
         <FaUserShield style={{ fontSize: '4rem', marginBottom: '20px' }} />
