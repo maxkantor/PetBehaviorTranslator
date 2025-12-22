@@ -23,7 +23,11 @@ function ProtectedAdminRoute({ children }) {
         alignItems: 'center',
         justifyContent: 'center',
         background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-        color: 'white'
+        color: 'white',
+        width: '100%',
+        maxWidth: '100%',
+        overflowX: 'hidden',
+        boxSizing: 'border-box'
       }}>
         <FaUserShield style={{ fontSize: '4rem', marginBottom: '20px' }} />
         <h2>Checking Admin Access...</h2>

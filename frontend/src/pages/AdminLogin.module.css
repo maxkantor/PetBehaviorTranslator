@@ -5,6 +5,9 @@
   justify-content: center;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   padding: 2rem;
+  overflow-x: hidden;
+  width: 100%;
+  max-width: 100%;
 }
 
 .loginCard {
@@ -15,6 +18,8 @@
   width: 100%;
   max-width: 450px;
   animation: slideUp 0.3s ease-out;
+  box-sizing: border-box;
+  overflow-x: hidden;
 }
 
 @keyframes slideUp {

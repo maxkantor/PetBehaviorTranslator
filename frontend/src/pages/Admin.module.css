@@ -3,6 +3,9 @@
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   padding: 40px 20px;
   color: #333;
+  overflow-x: hidden;
+  width: 100%;
+  max-width: 100%;
 }
 
 .header {
@@ -74,6 +77,9 @@
   border-radius: 20px;
   padding: 30px;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+  width: 100%;
+  box-sizing: border-box;
+  overflow-x: hidden;
 }
 
 .sectionTitle {
@@ -88,7 +94,7 @@
 /* Quick Actions */
 .quickActions {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr));
   gap: 20px;
   margin-bottom: 20px;
 }
@@ -133,8 +139,10 @@
   border-radius: 8px;
   font-size: 0.85rem;
   word-break: break-all;
+  overflow-wrap: break-word;
   margin: 10px 0;
   font-family: 'Courier New', monospace;
+  max-width: 100%;
 }
 
 .statusBadge {
@@ -251,7 +259,7 @@
 /* Users Grid */
 .usersGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr));
   gap: 20px;
 }
 
@@ -290,9 +298,12 @@
   padding: 5px 10px;
   border-radius: 6px;
   word-break: break-all;
+  overflow-wrap: break-word;
   font-family: 'Courier New', monospace;
   flex: 1;
   margin-right: 10px;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .crownBadge {
@@ -452,6 +463,33 @@
   .section {
     padding: 20px;
   }
+
+  .activityItem {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .activityTime,
+  .activityUser,
+  .activityAction {
+    grid-column: 1;
+  }
+
+  .eventItem {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .eventTime,
+  .eventUser,
+  .eventType,
+  .eventStatus {
+    grid-column: 1;
+  }
+
+  .summaryGrid {
+    grid-template-columns: 1fr;
+  }
 }
 
 /* Activity Log Styles */
@@ -461,15 +499,21 @@
   padding: 20px;
   max-height: 600px;
   overflow-y: auto;
+  overflow-x: hidden;
+  width: 100%;
 }
 
 .activityItem {
   padding: 15px;
   border-bottom: 1px solid #e9ecef;
   display: grid;
-  grid-template-columns: 200px 1fr 150px;
+  grid-template-columns: minmax(120px, 200px) 1fr minmax(100px, 150px);
   gap: 15px;
   align-items: start;
+  width: 100%;
+  max-width: 100%;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
 }
 
 .activityItem:last-child {
@@ -484,11 +528,15 @@
   font-size: 0.85rem;
   color: #6c757d;
   font-family: 'Courier New', monospace;
+  word-break: break-word;
+  overflow-wrap: break-word;
 }
 
 .activityUser {
   font-size: 0.9rem;
   color: #495057;
+  word-break: break-word;
+  overflow-wrap: break-word;
 }
 
 .activityUser strong {
@@ -515,7 +563,7 @@
 /* Summary Grid */
 .summaryGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(200px, 100%), 1fr));
   gap: 20px;
   margin-top: 20px;
 }
@@ -556,15 +604,21 @@
   padding: 20px;
   max-height: 600px;
   overflow-y: auto;
+  overflow-x: hidden;
+  width: 100%;
 }
 
 .eventItem {
   padding: 15px;
   border-bottom: 1px solid #e9ecef;
   display: grid;
-  grid-template-columns: 180px 1fr 120px 100px;
+  grid-template-columns: minmax(100px, 180px) 1fr minmax(80px, 120px) minmax(70px, 100px);
   gap: 15px;
   align-items: center;
+  width: 100%;
+  max-width: 100%;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
 }
 
 .eventItem:last-child {
@@ -579,12 +633,15 @@
   font-size: 0.85rem;
   color: #6c757d;
   font-family: 'Courier New', monospace;
+  word-break: break-word;
+  overflow-wrap: break-word;
 }
 
 .eventUser {
   font-size: 0.9rem;
   color: #495057;
   word-break: break-word;
+  overflow-wrap: break-word;
 }
 
 .eventType {
