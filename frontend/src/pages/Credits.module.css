@@ -135,16 +135,16 @@
 .backButton {
   display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
-  padding: 0.5rem 1rem;
-  background: linear-gradient(135deg, #4ecdc4 0%, #44a08d 100%);
+  gap: 0.5rem;
+  padding: 0.75rem 1.5rem;
+  background: linear-gradient(to right, #4ecdc4 0%, #44a08d 100%);
   color: white;
   text-decoration: none;
   border: none;
-  border-radius: 8px;
-  font-weight: 600;
-  font-size: 0.8rem;
-  box-shadow: 0 3px 12px rgba(78, 205, 196, 0.4);
+  border-radius: 10px;
+  font-weight: 700;
+  font-size: 0.95rem;
+  box-shadow: 0 4px 15px rgba(78, 205, 196, 0.4);
   transition: all 0.3s ease;
   cursor: pointer;
   font-family: inherit;
