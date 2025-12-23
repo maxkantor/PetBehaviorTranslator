@@ -8,7 +8,7 @@ import styles from './Support.module.css'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001'
 
-function Support() {
+function Support({ onClose }) {
   const [email, setEmail] = useState('')
   const [subject, setSubject] = useState('')
   const [message, setMessage] = useState('')
@@ -17,6 +17,7 @@ function Support() {
   const [userIsPremium, setUserIsPremium] = useState(false)
   const [ticketId, setTicketId] = useState(null)
   const [errors, setErrors] = useState({})
+  const isModal = !!onClose
 
   const faqItems = [
     {
@@ -107,6 +108,40 @@ function Support() {
   }
 
   if (submitted) {
+    const successContent = (
+      <div className={styles.modal}>
+        <div className={styles.successContainer}>
+          <FaCheckCircle className={styles.successIcon} />
+          <h1 className={styles.title}>Support Request Submitted!</h1>
+          <p className={styles.subtitle}>
+            {userIsPremium 
+              ? "Priority support ticket created! We'll respond within 24 hours."
+              : "Support ticket created! We'll respond within 48 hours."}
+          </p>
+          {ticketId && (
+            <p className={styles.ticketId}>
+              Ticket ID: <strong>{ticketId}</strong>
+            </p>
+          )}
+          {onClose ? (
+            <button onClick={onClose} className={styles.backToApp}>
+              <FaPaw />
+              Back to Translator
+            </button>
+          ) : (
+            <Link to="/" className={styles.backToApp}>
+              <FaPaw />
+              Back to Translator
+            </Link>
+          )}
+        </div>
+      </div>
+    )
+
+    if (isModal) {
+      return successContent
+    }
+
     return (
       <>
         <SEOHead 
@@ -116,39 +151,15 @@ function Support() {
         />
         <div className={styles.container}>
           <div className={styles.content}>
-            <div className={styles.successContainer}>
-              <FaCheckCircle className={styles.successIcon} />
-              <h1 className={styles.title}>Support Request Submitted!</h1>
-              <p className={styles.subtitle}>
-                {userIsPremium 
-                  ? "Priority support ticket created! We'll respond within 24 hours."
-                  : "Support ticket created! We'll respond within 48 hours."}
-              </p>
-              {ticketId && (
-                <p className={styles.ticketId}>
-                  Ticket ID: <strong>{ticketId}</strong>
-                </p>
-              )}
-              <Link to="/" className={styles.backButton}>
-                <FaPaw />
-                Back to Translator
-              </Link>
-            </div>
+            {successContent}
           </div>
         </div>
       </>
     )
   }
 
-  return (
-    <>
-      <SEOHead 
-        title="Support & Contact - Pet Behavior Translator"
-        description="Get help with the Pet Behavior Translator. Contact our support team for questions, feedback, or technical assistance."
-        keywords="pet translator support, pet behavior help, contact pet translator"
-      />
-      <div className={styles.overlay} role="dialog" aria-modal="true">
-        <div className={styles.modal}>
+  const modalContent = (
+    <div className={styles.modal}>
           <div className={styles.modalHeader}>
             <div className={styles.headerText}>
               <FaHeadset className={styles.headerIcon} />
@@ -272,12 +283,34 @@ function Support() {
             </div>
           </div>
           <div className={styles.modalFooter}>
-            <Link to="/" className={styles.backToApp}>
-              <FaPaw />
-              Back to Translator
-            </Link>
+            {onClose ? (
+              <button onClick={onClose} className={styles.backToApp}>
+                <FaPaw />
+                Back to Translator
+              </button>
+            ) : (
+              <Link to="/" className={styles.backToApp}>
+                <FaPaw />
+                Back to Translator
+              </Link>
+            )}
           </div>
         </div>
+  )
+
+  if (isModal) {
+    return modalContent
+  }
+
+  return (
+    <>
+      <SEOHead 
+        title="Support & Contact - Pet Behavior Translator"
+        description="Get help with the Pet Behavior Translator. Contact our support team for questions, feedback, or technical assistance."
+        keywords="pet translator support, pet behavior help, contact pet translator"
+      />
+      <div className={styles.overlay} role="dialog" aria-modal="true">
+        {modalContent}
       </div>
     </>
   )

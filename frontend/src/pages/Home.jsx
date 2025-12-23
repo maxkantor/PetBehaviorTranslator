@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { FaPaw, FaBone, FaCat, FaDog, FaHeart, FaLightbulb, FaListOl, FaExclamationTriangle, FaShoppingCart, FaCopyright, FaCrown, FaHeadset, FaUserShield, FaCoins } from 'react-icons/fa'
+import { FaPaw, FaBone, FaCat, FaDog, FaHeart, FaLightbulb, FaListOl, FaExclamationTriangle, FaShoppingCart, FaCopyright, FaCrown, FaHeadset, FaUserShield, FaCoins, FaTimes } from 'react-icons/fa'
 import { Link } from 'react-router-dom'
 import axios from 'axios'
 import { getUserId } from '../services/premiumService'
@@ -8,6 +8,8 @@ import { checkAdmin } from '../services/adminService'
 import { trackTranslation, trackOutOfCredits, trackCreditLow, identifyUser } from '../services/analyticsService'
 import CreditBalanceIndicator from '../components/CreditBalanceIndicator'
 import SEOHead from '../components/SEOHead'
+import Support from './Support'
+import Credits from './Credits'
 import styles from './Home.module.css'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001'
@@ -35,6 +37,8 @@ function Home() {
   })
   const [loadingBalance, setLoadingBalance] = useState(true)
   const [isAdmin, setIsAdmin] = useState(false)
+  const [showSupportModal, setShowSupportModal] = useState(false)
+  const [showCreditsModal, setShowCreditsModal] = useState(false)
 
   // Load credit balance and check admin status on component mount
   useEffect(() => {
@@ -382,9 +386,9 @@ function Home() {
           <CreditBalanceIndicator />
           <p className={styles.creditExplanation}>1 credit = 1 behavior analysis</p>
           {!loadingBalance && !isAdmin && creditBalance.freeSearchesRemaining === 0 && creditBalance.creditsRemaining === 0 && (
-            <Link to="/credits" className={styles.upgradeLink}>
+            <button onClick={() => setShowCreditsModal(true)} className={styles.upgradeLink}>
               Buy Credits
-            </Link>
+            </button>
           )}
         </div>
       </div>
@@ -636,14 +640,14 @@ function Home() {
       <footer className={styles.footer}>
         <div className={styles.footerContent}>
           <div className={styles.footerLinks}>
-            <Link to="/credits" className={styles.premiumLink}>
+            <button onClick={() => setShowCreditsModal(true)} className={styles.premiumLink}>
               <FaCoins />
               Buy Credits
-            </Link>
-            <Link to="/support" className={styles.supportLinkSecondary}>
+            </button>
+            <button onClick={() => setShowSupportModal(true)} className={styles.supportLinkSecondary}>
               <FaHeadset />
               Need Help?
-            </Link>
+            </button>
           </div>
 
           <div className={styles.copyright}>
@@ -658,6 +662,30 @@ function Home() {
           </div>
         </div>
       </footer>
+
+      {/* Support Modal */}
+      {showSupportModal && (
+        <div className={styles.modalOverlay} onClick={() => setShowSupportModal(false)}>
+          <div className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
+            <button className={styles.modalClose} onClick={() => setShowSupportModal(false)}>
+              <FaTimes />
+            </button>
+            <Support onClose={() => setShowSupportModal(false)} />
+          </div>
+        </div>
+      )}
+
+      {/* Credits Modal */}
+      {showCreditsModal && (
+        <div className={styles.modalOverlay} onClick={() => setShowCreditsModal(false)}>
+          <div className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
+            <button className={styles.modalClose} onClick={() => setShowCreditsModal(false)}>
+              <FaTimes />
+            </button>
+            <Credits onClose={() => setShowCreditsModal(false)} />
+          </div>
+        </div>
+      )}
     </div>
     </>
   )

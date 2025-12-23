@@ -1,5 +1,5 @@
 .container {
-  min-height: 100vh;
+  height: 100vh;
   background: 
     radial-gradient(circle at 20% 50%, rgba(255, 182, 193, 0.4) 0%, transparent 50%),
     radial-gradient(circle at 80% 80%, rgba(255, 218, 185, 0.4) 0%, transparent 50%),
@@ -8,10 +8,12 @@
   background-size: 100% 100%, 100% 100%, 100% 100%, 100% 100%;
   padding: 1.25rem 1rem;
   position: relative;
-  overflow-x: hidden;
+  overflow: hidden;
   width: 100%;
   max-width: 100%;
   box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
 }
 
 .container::before {
@@ -168,6 +170,10 @@
   width: 100%;
   box-sizing: border-box;
   overflow-x: hidden;
+  overflow-y: auto;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
 }
 
 .inputSection {
@@ -729,6 +735,97 @@
   }
 }
 
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(18, 12, 48, 0.7);
+  backdrop-filter: blur(4px);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  overflow-y: auto;
+}
+
+.modalContent {
+  position: relative;
+  width: 100%;
+  max-width: 1100px;
+  max-height: calc(100vh - 3rem);
+  overflow-y: auto;
+  background: transparent;
+}
+
+/* Style for Support modal content */
+.modalContent > .modal {
+  background: #ffffff;
+  border-radius: 18px;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.22);
+  padding: 1.5rem 1.5rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  box-sizing: border-box;
+  max-height: calc(100vh - 3rem);
+  overflow-y: auto;
+}
+
+/* Style for Credits modal content */
+.modalContent > .content {
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 20px;
+  padding: 3rem;
+  text-align: center;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+  max-width: 1000px;
+  width: 100%;
+  position: relative;
+  z-index: 2;
+  box-sizing: border-box;
+  overflow-x: hidden;
+  max-height: calc(100vh - 3rem);
+  overflow-y: auto;
+}
+
+.modalClose {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  z-index: 1001;
+  background: rgba(255, 255, 255, 0.9);
+  border: none;
+  border-radius: 50%;
+  width: 2.5rem;
+  height: 2.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 1.25rem;
+  color: #333;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  transition: all 0.3s ease;
+}
+
+.modalClose:hover {
+  background: white;
+  transform: scale(1.1);
+}
+
+.premiumLink,
+.supportLinkSecondary {
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.premiumLink:focus,
+.supportLinkSecondary:focus {
+  outline: 2px solid rgba(255, 255, 255, 0.5);
+  outline-offset: 2px;
+}
+
 @media (max-width: 768px) {
   .title {
     font-size: 2rem;
@@ -838,6 +935,14 @@
     width: 1.5rem;
     height: 1.5rem;
     font-size: 0.75rem;
+  }
+
+  .modalOverlay {
+    padding: 1rem;
+  }
+
+  .modalContent {
+    max-height: calc(100vh - 2rem);
   }
 }
 

@@ -5,13 +5,14 @@ import { getCreditTiers, purchaseCredits, getCreditToken } from '../services/cre
 import SEOHead from '../components/SEOHead'
 import styles from './Credits.module.css'
 
-function Credits() {
+function Credits({ onClose }) {
   const [loading, setLoading] = useState(false)
   const [selectedTier, setSelectedTier] = useState(null)
   const [message, setMessage] = useState('')
   const [messageType, setMessageType] = useState('')
   const [tiers, setTiers] = useState([])
   const [loadingTiers, setLoadingTiers] = useState(true)
+  const isModal = !!onClose
 
   useEffect(() => {
     // Reset loading state when component mounts (e.g., when user comes back from checkout)
@@ -71,31 +72,8 @@ function Credits() {
     }
   }
 
-  return (
-    <>
-      <SEOHead 
-        title="Buy Credits - Pet Behavior Translator"
-        description="Purchase credit packages to continue using our AI pet behavior translator. Affordable pricing with multiple tier options for all your pet behavior questions."
-        keywords="buy pet translator credits, pet behavior credits, purchase pet translator"
-      />
-      <div className={styles.container}>
-      {/* Decorative Pet Images */}
-      <img 
-        src="https://images.unsplash.com/photo-1548199973-03cce0bbc87b?w=300&h=300&fit=crop&crop=face" 
-        alt="Cute puppy" 
-        className={styles.petImage}
-        loading="lazy"
-      />
-      <img 
-        src="https://images.unsplash.com/photo-1595433707802-6b2626ef1c91?w=300&h=300&fit=crop&crop=face" 
-        alt="Adorable kitten" 
-        className={styles.petImage}
-        style={{ top: '10%', right: '5%', animationDelay: '1s' }}
-        loading="lazy"
-      />
-      
-      <div className={styles.overlay}>
-      <div className={styles.content}>
+  const modalContent = (
+    <div className={styles.content}>
         <div className={styles.iconContainer}>
           <FaCoins className={styles.coinIcon} />
         </div>
@@ -194,10 +172,17 @@ function Credits() {
           </p>
         </div>
 
-        <Link to="/" className={styles.backButton}>
-          <FaCoins />
-          Back to Translator
-        </Link>
+        {onClose ? (
+          <button onClick={onClose} className={styles.backButton}>
+            <FaCoins />
+            Back to Translator
+          </button>
+        ) : (
+          <Link to="/" className={styles.backButton}>
+            <FaCoins />
+            Back to Translator
+          </Link>
+        )}
         
         <footer className={styles.footer}>
           <div className={styles.footerContent}>
@@ -211,6 +196,37 @@ function Credits() {
           </div>
         </footer>
       </div>
+  )
+
+  if (isModal) {
+    return modalContent
+  }
+
+  return (
+    <>
+      <SEOHead 
+        title="Buy Credits - Pet Behavior Translator"
+        description="Purchase credit packages to continue using our AI pet behavior translator. Affordable pricing with multiple tier options for all your pet behavior questions."
+        keywords="buy pet translator credits, pet behavior credits, purchase pet translator"
+      />
+      <div className={styles.container}>
+      {/* Decorative Pet Images */}
+      <img 
+        src="https://images.unsplash.com/photo-1548199973-03cce0bbc87b?w=300&h=300&fit=crop&crop=face" 
+        alt="Cute puppy" 
+        className={styles.petImage}
+        loading="lazy"
+      />
+      <img 
+        src="https://images.unsplash.com/photo-1595433707802-6b2626ef1c91?w=300&h=300&fit=crop&crop=face" 
+        alt="Adorable kitten" 
+        className={styles.petImage}
+        style={{ top: '10%', right: '5%', animationDelay: '1s' }}
+        loading="lazy"
+      />
+      
+      <div className={styles.overlay}>
+        {modalContent}
       </div>
     </div>
     </>

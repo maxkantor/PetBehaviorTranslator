@@ -1,5 +1,5 @@
 .container {
-  min-height: 100vh;
+  height: 100vh;
   max-height: 100vh;
   display: flex;
   align-items: center;
@@ -74,8 +74,11 @@
   border-radius: 12px;
   font-weight: 700;
   text-decoration: none;
+  border: none;
   box-shadow: 0 4px 12px rgba(75, 95, 210, 0.2);
   transition: transform 0.2s ease, box-shadow 0.2s ease;
+  cursor: pointer;
+  font-family: inherit;
 }
 
 .backToApp:hover {
