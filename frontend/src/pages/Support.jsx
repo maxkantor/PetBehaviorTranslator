@@ -157,10 +157,6 @@ function Support() {
                 <p className={styles.subtitle}>FAQs on the left, message us on the right.</p>
               </div>
             </div>
-            <Link to="/" className={styles.backToApp}>
-              <FaPaw />
-              Back to Translator
-            </Link>
           </div>
 
           <div className={styles.modalBody}>
@@ -274,6 +270,12 @@ function Support() {
                 </div>
               </form>
             </div>
+          </div>
+          <div className={styles.modalFooter}>
+            <Link to="/" className={styles.backToApp}>
+              <FaPaw />
+              Back to Translator
+            </Link>
           </div>
         </div>
       </div>

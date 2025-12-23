@@ -107,8 +107,8 @@
 }
 
 .faqList {
-  overflow-y: auto;
-  max-height: 55vh;
+  overflow-y: visible;
+  max-height: none;
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
@@ -288,6 +288,12 @@
   padding: 0.85rem 1rem;
 }
 
+.modalFooter {
+  display: flex;
+  justify-content: center;
+  margin-top: 0.75rem;
+}
+
 .successContainer {
   text-align: center;
 }
@@ -320,10 +326,6 @@
 @media (max-width: 900px) {
   .modalBody {
     grid-template-columns: 1fr;
-  }
-
-  .faqList {
-    max-height: 35vh;
   }
 }
 
