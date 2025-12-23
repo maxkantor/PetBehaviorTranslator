@@ -782,7 +782,7 @@
 .modalContent > .content {
   background: rgba(255, 255, 255, 0.95);
   border-radius: 20px;
-  padding: 1.5rem 2rem;
+  padding: 1rem 1.5rem;
   text-align: center;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
   max-width: 1000px;
@@ -791,7 +791,7 @@
   z-index: 2;
   box-sizing: border-box;
   overflow-x: hidden;
-  max-height: calc(100vh - 3rem);
+  max-height: calc(100vh - 2rem);
   overflow-y: hidden;
   display: flex;
   flex-direction: column;

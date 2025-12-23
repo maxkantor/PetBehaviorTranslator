@@ -93,24 +93,15 @@ function Credits({ onClose }) {
         <div className={styles.features}>
           <div className={styles.feature}>
             <FaGift className={styles.featureIcon} />
-            <div>
-              <p><strong>5 Free Searches</strong></p>
-              <p className={styles.featureDesc}>Start with 5 free translations - no credit card required</p>
-            </div>
+            <strong>5 Free Searches</strong>
           </div>
           <div className={styles.feature}>
             <FaCoins className={styles.featureIcon} />
-            <div>
-              <p><strong>Credits Never Expire</strong></p>
-              <p className={styles.featureDesc}>Use your credits whenever you need them</p>
-            </div>
+            <strong>Credits Never Expire</strong>
           </div>
           <div className={styles.feature}>
             <FaCrown className={styles.featureIcon} />
-            <div>
-              <p><strong>Same Quality Analysis</strong></p>
-              <p className={styles.featureDesc}>All translations use the same advanced AI analysis</p>
-            </div>
+            <strong>Same Quality Analysis</strong>
           </div>
         </div>
 
@@ -178,23 +169,24 @@ function Credits({ onClose }) {
             Back to Translator
           </button>
         ) : (
-          <Link to="/" className={styles.backButton}>
-            <FaCoins />
-            Back to Translator
-          </Link>
+          <>
+            <Link to="/" className={styles.backButton}>
+              <FaCoins />
+              Back to Translator
+            </Link>
+            <footer className={styles.footer}>
+              <div className={styles.footerContent}>
+                <div className={styles.copyright}>
+                  <FaCopyright className={styles.copyrightIcon} />
+                  <span>{new Date().getFullYear()} Pet Behavior Translator. All rights reserved.</span>
+                  <span className={styles.madeWith}>
+                    Made with <FaHeart className={styles.heartIcon} /> for pet lovers
+                  </span>
+                </div>
+              </div>
+            </footer>
+          </>
         )}
-        
-        <footer className={styles.footer}>
-          <div className={styles.footerContent}>
-            <div className={styles.copyright}>
-              <FaCopyright className={styles.copyrightIcon} />
-              <span>{new Date().getFullYear()} Pet Behavior Translator. All rights reserved.</span>
-              <span className={styles.madeWith}>
-                Made with <FaHeart className={styles.heartIcon} /> for pet lovers
-              </span>
-            </div>
-          </div>
-        </footer>
       </div>
   )
 
