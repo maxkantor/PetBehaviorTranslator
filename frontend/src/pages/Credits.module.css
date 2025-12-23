@@ -48,17 +48,17 @@
 
 .content {
   background: rgba(255, 255, 255, 0.95);
-  border-radius: 20px;
-  padding: 1rem 1.5rem;
+  border-radius: 16px;
+  padding: 0.75rem 1.25rem;
   text-align: center;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
-  max-width: 1000px;
+  max-width: 950px;
   width: 100%;
   position: relative;
   z-index: 2;
   box-sizing: border-box;
   overflow-x: hidden;
-  max-height: calc(100vh - 2rem);
+  max-height: calc(100vh - 1.5rem);
   overflow-y: hidden;
   display: flex;
   flex-direction: column;
@@ -66,11 +66,11 @@
 }
 
 .iconContainer {
-  margin-bottom: 0.25rem;
+  margin-bottom: 0.1rem;
 }
 
 .coinIcon {
-  font-size: 1.5rem;
+  font-size: 1.2rem;
   color: #ffe66d;
   filter: drop-shadow(2px 2px 4px rgba(0, 0, 0, 0.2));
   animation: bounce 2s infinite;
@@ -86,24 +86,24 @@
 }
 
 .title {
-  font-size: 1.4rem;
+  font-size: 1.2rem;
   font-weight: 800;
   color: #333;
-  margin-bottom: 0.25rem;
+  margin-bottom: 0.15rem;
 }
 
 .subtitle {
-  font-size: 0.85rem;
+  font-size: 0.75rem;
   color: #666;
-  margin-bottom: 0.5rem;
-  line-height: 1.3;
+  margin-bottom: 0.4rem;
+  line-height: 1.25;
 }
 
 .features {
   display: flex;
   flex-direction: row;
-  gap: 0.5rem;
-  margin-bottom: 0.75rem;
+  gap: 0.4rem;
+  margin-bottom: 0.5rem;
   flex-wrap: wrap;
   justify-content: center;
 }
@@ -111,11 +111,11 @@
 .feature {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem 0.75rem;
+  gap: 0.4rem;
+  padding: 0.4rem 0.6rem;
   background: rgba(255, 230, 109, 0.2);
-  border-radius: 8px;
-  font-size: 0.75rem;
+  border-radius: 6px;
+  font-size: 0.7rem;
   color: #555;
   text-align: left;
   flex: 1;
@@ -124,7 +124,7 @@
 
 .featureIcon {
   color: #ff6b9d;
-  font-size: 0.9rem;
+  font-size: 0.75rem;
   flex-shrink: 0;
 }
 
@@ -135,20 +135,20 @@
 .backButton {
   display: inline-flex;
   align-items: center;
-  gap: 0.4rem;
-  padding: 0.6rem 1.25rem;
+  gap: 0.35rem;
+  padding: 0.5rem 1rem;
   background: linear-gradient(135deg, #4ecdc4 0%, #44a08d 100%);
   color: white;
   text-decoration: none;
   border: none;
-  border-radius: 10px;
-  font-weight: 700;
-  font-size: 0.85rem;
-  box-shadow: 0 4px 16px rgba(78, 205, 196, 0.4);
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 0.8rem;
+  box-shadow: 0 3px 12px rgba(78, 205, 196, 0.4);
   transition: all 0.3s ease;
   cursor: pointer;
   font-family: inherit;
-  margin-top: 0.25rem;
+  margin-top: 0.2rem;
 }
 
 .backButton:hover {
@@ -191,28 +191,28 @@
 
 /* Pricing Section */
 .pricingSection {
-  margin: 0.5rem 0;
+  margin: 0.4rem 0;
 }
 
 .pricingTitle {
-  font-size: 1.1rem;
+  font-size: 0.95rem;
   font-weight: 700;
   color: #333;
-  margin-bottom: 0.75rem;
+  margin-bottom: 0.5rem;
 }
 
 .pricingGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 0.75rem;
-  margin-bottom: 0.5rem;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 0.6rem;
+  margin-bottom: 0.4rem;
 }
 
 .pricingCard {
   background: white;
   border: 2px solid #e0e0e0;
-  border-radius: 12px;
-  padding: 0.75rem 1rem;
+  border-radius: 10px;
+  padding: 0.6rem 0.85rem;
   position: relative;
   transition: all 0.3s;
   display: flex;
@@ -248,87 +248,87 @@
 }
 
 .planName {
-  font-size: 0.95rem;
+  font-size: 0.85rem;
   font-weight: 700;
   color: #333;
-  margin-bottom: 0.25rem;
-  margin-top: 0.1rem;
+  margin-bottom: 0.2rem;
+  margin-top: 0.05rem;
 }
 
 .planPrice {
   display: flex;
   align-items: baseline;
   justify-content: center;
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.35rem;
 }
 
 .price {
-  font-size: 1.4rem;
+  font-size: 1.2rem;
   font-weight: 800;
   color: #667eea;
 }
 
 .period {
-  font-size: 0.8rem;
+  font-size: 0.7rem;
   color: #666;
-  margin-left: 0.25rem;
+  margin-left: 0.2rem;
 }
 
 .creditsAmount {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.4rem;
-  margin-bottom: 0.4rem;
-  padding: 0.5rem;
+  gap: 0.3rem;
+  margin-bottom: 0.3rem;
+  padding: 0.4rem;
   background: rgba(102, 126, 234, 0.1);
-  border-radius: 8px;
+  border-radius: 6px;
 }
 
 .creditsIcon {
   color: #ffe66d;
-  font-size: 1.1rem;
+  font-size: 0.95rem;
 }
 
 .creditsNumber {
-  font-size: 1.2rem;
+  font-size: 1rem;
   font-weight: 800;
   color: #667eea;
 }
 
 .creditsLabel {
-  font-size: 0.85rem;
+  font-size: 0.75rem;
   color: #666;
   font-weight: 600;
 }
 
 .planDescription {
   color: #666;
-  margin-bottom: 0.25rem;
-  font-size: 0.75rem;
+  margin-bottom: 0.2rem;
+  font-size: 0.7rem;
   flex-grow: 1;
 }
 
 .pricePerCredit {
-  font-size: 0.7rem;
+  font-size: 0.65rem;
   color: #888;
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.4rem;
   font-style: italic;
 }
 
 .purchaseButton {
   width: 100%;
-  padding: 8px 16px;
+  padding: 6px 12px;
   border: none;
-  border-radius: 8px;
-  font-size: 0.85rem;
+  border-radius: 6px;
+  font-size: 0.8rem;
   font-weight: 700;
   cursor: pointer;
   transition: all 0.3s;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: 5px;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
 }
@@ -377,14 +377,14 @@
 .securePayment {
   text-align: center;
   color: #666;
-  font-size: 0.7rem;
-  margin-top: 0.25rem;
-  margin-bottom: 0.25rem;
+  font-size: 0.65rem;
+  margin-top: 0.15rem;
+  margin-bottom: 0.15rem;
 }
 
 .footer {
-  margin-top: 0.25rem;
-  padding-top: 0.5rem;
+  margin-top: 0.15rem;
+  padding-top: 0.4rem;
   border-top: 1px solid #e0e0e0;
 }
 
