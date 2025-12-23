@@ -94,6 +94,7 @@ function Credits() {
         loading="lazy"
       />
       
+      <div className={styles.overlay}>
       <div className={styles.content}>
         <div className={styles.iconContainer}>
           <FaCoins className={styles.coinIcon} />
@@ -209,6 +210,7 @@ function Credits() {
             </div>
           </div>
         </footer>
+      </div>
       </div>
     </div>
     </>

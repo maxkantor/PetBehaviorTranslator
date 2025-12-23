@@ -11,10 +11,16 @@
   padding: 2rem;
   position: relative;
   overflow-x: hidden;
-  overflow-y: auto;
+  overflow-y: hidden;
   width: 100%;
   max-width: 100%;
   box-sizing: border-box;
+}
+
+.overlay {
+  width: 100%;
+  max-width: 1100px;
+  margin: 0 auto;
 }
 
 .petImage {
@@ -53,6 +59,8 @@
   z-index: 2;
   box-sizing: border-box;
   overflow-x: hidden;
+  max-height: calc(100vh - 6rem);
+  overflow-y: auto;
 }
 
 .iconContainer {
