@@ -250,7 +250,7 @@ function Support({ onClose }) {
                       }
                     }}
                     placeholder="Describe your question or issue..."
-                    rows={4}
+                    rows={8}
                     required
                   />
                   {errors.message && <span className={styles.errorMessage}>{errors.message}</span>}
