@@ -60,6 +60,14 @@
   overflow-x: hidden;
   max-height: calc(100vh - 6rem);
   overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE and Edge */
+}
+
+.content::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, Opera */
 }
 
 .iconContainer {
