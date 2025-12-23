@@ -18,6 +18,25 @@ function Support() {
   const [ticketId, setTicketId] = useState(null)
   const [errors, setErrors] = useState({})
 
+  const faqItems = [
+    {
+      question: 'How does the AI analysis work?',
+      answer: 'Our AI reviews the behavior you describe, finds patterns, and provides communication tips and next steps.'
+    },
+    {
+      question: 'Do insights expire?',
+      answer: 'No. Your insights stay available, and you can unlock more anytime.'
+    },
+    {
+      question: 'How fast is the response?',
+      answer: 'Premium: within 24 hours. Free: within 48 hours.'
+    },
+    {
+      question: 'What should I include in my message?',
+      answer: 'Include context (what happened, when, any patterns) and what outcome you want (reassurance, plan, or review).'
+    }
+  ]
+
   // Check premium status on mount
   useEffect(() => {
     const checkPremium = async () => {
@@ -128,121 +147,136 @@ function Support() {
         description="Get help with the Pet Behavior Translator. Contact our support team for questions, feedback, or technical assistance."
         keywords="pet translator support, pet behavior help, contact pet translator"
       />
-      <div className={styles.container}>
-      <div className={styles.content}>
-        <div className={styles.header}>
-          <FaHeadset className={styles.headerIcon} />
-          <h1 className={styles.title}>Contact Support</h1>
-          {userIsPremium && (
-            <div className={styles.premiumBadge}>
-              <FaCrown className={styles.crownIcon} />
-              <span>Priority Support - 24hr Response</span>
+      <div className={styles.overlay} role="dialog" aria-modal="true">
+        <div className={styles.modal}>
+          <div className={styles.modalHeader}>
+            <div className={styles.headerText}>
+              <FaHeadset className={styles.headerIcon} />
+              <div>
+                <h1 className={styles.title}>Need Help?</h1>
+                <p className={styles.subtitle}>FAQs on the left, message us on the right.</p>
+              </div>
             </div>
-          )}
+            <Link to="/" className={styles.backToApp}>
+              <FaPaw />
+              Back to Translator
+            </Link>
+          </div>
+
+          <div className={styles.modalBody}>
+            <div className={styles.faqColumn}>
+              <h3 className={styles.columnTitle}>Frequently Asked Questions</h3>
+              <div className={styles.faqList}>
+                {faqItems.map((item, idx) => (
+                  <div key={idx} className={styles.faqItem}>
+                    <h4>{item.question}</h4>
+                    <p>{item.answer}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className={styles.formColumn}>
+              {userIsPremium && (
+                <div className={styles.premiumBadge}>
+                  <FaCrown className={styles.crownIcon} />
+                  <span>Priority Support - 24hr Response</span>
+                </div>
+              )}
+
+              <form onSubmit={handleSubmit} className={styles.form}>
+                <div className={styles.formGroup}>
+                  <label htmlFor="email" className={styles.label}>
+                    <FaEnvelope className={styles.labelIcon} />
+                    Email *
+                  </label>
+                  <input
+                    type="email"
+                    id="email"
+                    className={`${styles.input} ${errors.email ? styles.inputError : ''}`}
+                    value={email}
+                    onChange={(e) => {
+                      setEmail(e.target.value)
+                      if (errors.email) {
+                        setErrors({ ...errors, email: '' })
+                      }
+                    }}
+                    placeholder="your@email.com"
+                    required
+                  />
+                  {errors.email && <span className={styles.errorMessage}>{errors.email}</span>}
+                </div>
+
+                <div className={styles.formGroup}>
+                  <label htmlFor="subject" className={styles.label}>
+                    Subject *
+                  </label>
+                  <input
+                    type="text"
+                    id="subject"
+                    className={`${styles.input} ${errors.subject ? styles.inputError : ''}`}
+                    value={subject}
+                    onChange={(e) => {
+                      setSubject(e.target.value)
+                      if (errors.subject) {
+                        setErrors({ ...errors, subject: '' })
+                      }
+                    }}
+                    placeholder="What's this about?"
+                    required
+                  />
+                  {errors.subject && <span className={styles.errorMessage}>{errors.subject}</span>}
+                </div>
+
+                <div className={styles.formGroup}>
+                  <label htmlFor="message" className={styles.label}>
+                    Message *
+                  </label>
+                  <textarea
+                    id="message"
+                    className={`${styles.textarea} ${errors.message ? styles.inputError : ''}`}
+                    value={message}
+                    onChange={(e) => {
+                      setMessage(e.target.value)
+                      if (errors.message) {
+                        setErrors({ ...errors, message: '' })
+                      }
+                    }}
+                    placeholder="Describe your question or issue..."
+                    rows={8}
+                    required
+                  />
+                  {errors.message && <span className={styles.errorMessage}>{errors.message}</span>}
+                </div>
+
+                <button
+                  type="submit"
+                  className={styles.submitButton}
+                  disabled={loading || !email.trim() || !subject.trim() || !message.trim()}
+                >
+                  {loading ? (
+                    <>
+                      <FaPaw className={styles.spinningPaw} />
+                      Sending...
+                    </>
+                  ) : (
+                    <>
+                      <FaEnvelope />
+                      Send Message
+                    </>
+                  )}
+                </button>
+
+                <div className={styles.responseTimes}>
+                  <strong>Response Times</strong>
+                  <span><FaCrown className={styles.crownIcon} /> Premium: within 24 hours</span>
+                  <span>Free: within 48 hours</span>
+                </div>
+              </form>
+            </div>
+          </div>
         </div>
-
-        <form onSubmit={handleSubmit} className={styles.form}>
-          <div className={styles.formGroup}>
-            <label htmlFor="email" className={styles.label}>
-              <FaEnvelope className={styles.labelIcon} />
-              Email *
-            </label>
-            <input
-              type="email"
-              id="email"
-              className={`${styles.input} ${errors.email ? styles.inputError : ''}`}
-              value={email}
-              onChange={(e) => {
-                setEmail(e.target.value)
-                if (errors.email) {
-                  setErrors({ ...errors, email: '' })
-                }
-              }}
-              placeholder="your@email.com"
-              required
-            />
-            {errors.email && <span className={styles.errorMessage}>{errors.email}</span>}
-          </div>
-
-          <div className={styles.formGroup}>
-            <label htmlFor="subject" className={styles.label}>
-              Subject *
-            </label>
-            <input
-              type="text"
-              id="subject"
-              className={`${styles.input} ${errors.subject ? styles.inputError : ''}`}
-              value={subject}
-              onChange={(e) => {
-                setSubject(e.target.value)
-                if (errors.subject) {
-                  setErrors({ ...errors, subject: '' })
-                }
-              }}
-              placeholder="What's this about?"
-              required
-            />
-            {errors.subject && <span className={styles.errorMessage}>{errors.subject}</span>}
-          </div>
-
-          <div className={styles.formGroup}>
-            <label htmlFor="message" className={styles.label}>
-              Message *
-            </label>
-            <textarea
-              id="message"
-              className={`${styles.textarea} ${errors.message ? styles.inputError : ''}`}
-              value={message}
-              onChange={(e) => {
-                setMessage(e.target.value)
-                if (errors.message) {
-                  setErrors({ ...errors, message: '' })
-                }
-              }}
-              placeholder="Describe your question or issue..."
-              rows={8}
-              required
-            />
-            {errors.message && <span className={styles.errorMessage}>{errors.message}</span>}
-          </div>
-
-          <button
-            type="submit"
-            className={styles.submitButton}
-            disabled={loading || !email.trim() || !subject.trim() || !message.trim()}
-          >
-            {loading ? (
-              <>
-                <FaPaw className={styles.spinningPaw} />
-                Sending...
-              </>
-            ) : (
-              <>
-                <FaEnvelope />
-                Send Message
-              </>
-            )}
-          </button>
-        </form>
-
-        <div className={styles.info}>
-          <p>
-            <strong>Response Times:</strong>
-          </p>
-          <ul>
-            <li>
-              <FaCrown className={styles.crownIcon} /> Premium: Within 24 hours
-            </li>
-            <li>Free: Within 48 hours</li>
-          </ul>
-        </div>
-
-        <Link to="/" className={styles.backButton}>
-          <FaPaw />
-          Back to Translator
-        </Link>
       </div>
-    </div>
     </>
   )
 }
