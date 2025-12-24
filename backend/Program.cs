@@ -1548,6 +1548,63 @@ app.MapGet("/api/admin/dashboard", async (HttpContext context) =>
 .WithName("AdminDashboard")
 .WithOpenApi();
 
+// GET /admin/stripe-activities - Get Stripe purchase and refund activities
+app.MapGet("/api/admin/stripe-activities", async (HttpContext context) =>
+{
+    // First try to validate admin session from token
+    var (isValidSession, sessionUserId) = await ValidateAdminSessionAsync(context);
+    
+    string userId;
+    if (isValidSession && !string.IsNullOrWhiteSpace(sessionUserId))
+    {
+        userId = sessionUserId;
+    }
+    else
+    {
+        // Fallback to query parameter and check IsAdmin
+        userId = context.Request.Query["adminUserId"].ToString();
+        var email = context.Request.Query["email"].ToString();
+        var isAdmin = await IsAdminAsync(userId, email);
+        if (!isAdmin)
+        {
+            return Results.Json(new { message = "Admin access required" }, statusCode: 401);
+        }
+    }
+
+    // Get all events and filter for Stripe-related activities
+    var allEvents = await eventLogService.GetRecentEventsAsync(10000);
+    
+    var stripeActivities = allEvents
+        .Where(e => e.EventType == "PURCHASE" || e.EventType == "PREMIUM_PURCHASE" || e.EventType == "REFUND")
+        .OrderByDescending(e => e.Timestamp)
+        .Select(e => new
+        {
+            eventType = e.EventType,
+            userId = e.UserId,
+            email = e.Email,
+            customerName = e.CustomerName,
+            last4Digits = e.Last4Digits,
+            paymentMethod = e.PaymentMethod,
+            amount = e.Amount,
+            currency = e.Currency,
+            stripeSessionId = e.StripeSessionId,
+            stripePaymentIntentId = e.StripePaymentIntentId,
+            stripeCustomerId = e.StripeCustomerId,
+            status = e.Status,
+            details = e.Details,
+            timestamp = e.Timestamp
+        })
+        .ToList();
+
+    return Results.Ok(new
+    {
+        activities = stripeActivities,
+        totalCount = stripeActivities.Count
+    });
+})
+.WithName("GetStripeActivities")
+.WithOpenApi();
+
 // POST /admin/config - Update admin configuration
 app.MapPost("/api/admin/config", async (AdminConfigUpdateRequest request, HttpContext context) =>
 {
@@ -2318,6 +2375,64 @@ app.MapPost("/api/payment/webhook", async (HttpContext context) =>
             {
                 var purchaseType = session.Metadata.GetValueOrDefault("purchaseType");
                 
+                // Get customer details from Stripe
+                string? customerName = null;
+                string? customerEmail = session.CustomerEmail;
+                string? last4Digits = null;
+                string? paymentMethod = null;
+                decimal? amount = null;
+                string? currency = null;
+                string? paymentIntentId = session.PaymentIntentId;
+                string? customerId = session.CustomerId;
+                
+                // Fetch payment intent to get card details
+                if (!string.IsNullOrWhiteSpace(paymentIntentId) && !string.IsNullOrWhiteSpace(stripeSecretKey))
+                {
+                    try
+                    {
+                        var paymentIntentService = new PaymentIntentService();
+                        var paymentIntent = await paymentIntentService.GetAsync(paymentIntentId);
+                        
+                        if (paymentIntent != null)
+                        {
+                            amount = paymentIntent.Amount / 100m; // Convert from cents
+                            currency = paymentIntent.Currency?.ToUpper();
+                            
+                            // Get payment method details
+                            if (!string.IsNullOrWhiteSpace(paymentIntent.PaymentMethodId))
+                            {
+                                var paymentMethodService = new PaymentMethodService();
+                                var paymentMethodObj = await paymentMethodService.GetAsync(paymentIntent.PaymentMethodId);
+                                
+                                if (paymentMethodObj != null)
+                                {
+                                    paymentMethod = paymentMethodObj.Card?.Brand;
+                                    last4Digits = paymentMethodObj.Card?.Last4;
+                                    
+                                    // Get customer name if available
+                                    if (!string.IsNullOrWhiteSpace(customerId))
+                                    {
+                                        var customerService = new CustomerService();
+                                        var customer = await customerService.GetAsync(customerId);
+                                        if (customer != null)
+                                        {
+                                            customerName = customer.Name;
+                                            if (string.IsNullOrWhiteSpace(customerEmail))
+                                            {
+                                                customerEmail = customer.Email;
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"[STRIPE WEBHOOK] Error fetching payment details: {ex.Message}");
+                    }
+                }
+                
                 if (purchaseType == "credits")
                 {
                     // Handle credit purchase
@@ -2344,6 +2459,15 @@ app.MapPost("/api/payment/webhook", async (HttpContext context) =>
                                 {
                                     EventType = "PURCHASE",
                                     UserId = userId ?? payload.UserId,
+                                    Email = customerEmail ?? payload.UserId,
+                                    CustomerName = customerName,
+                                    Last4Digits = last4Digits,
+                                    PaymentMethod = paymentMethod,
+                                    Amount = amount ?? tier.Price,
+                                    Currency = currency ?? "USD",
+                                    StripeSessionId = session.Id,
+                                    StripePaymentIntentId = paymentIntentId,
+                                    StripeCustomerId = customerId,
                                     Status = "SUCCESS",
                                     Details = $"Stripe webhook: Purchased {tier.Credits} credits from tier {tier.Name}, session={session.Id}"
                                 });
@@ -2376,6 +2500,15 @@ app.MapPost("/api/payment/webhook", async (HttpContext context) =>
                         {
                             EventType = "PREMIUM_PURCHASE",
                             UserId = userId,
+                            Email = customerEmail,
+                            CustomerName = customerName,
+                            Last4Digits = last4Digits,
+                            PaymentMethod = paymentMethod,
+                            Amount = amount,
+                            Currency = currency ?? "USD",
+                            StripeSessionId = session.Id,
+                            StripePaymentIntentId = paymentIntentId,
+                            StripeCustomerId = customerId,
                             Status = "SUCCESS",
                             Details = $"Stripe webhook: Premium {planId} plan purchased, session={session.Id}"
                         });
@@ -2383,6 +2516,60 @@ app.MapPost("/api/payment/webhook", async (HttpContext context) =>
                         Console.WriteLine($"[STRIPE WEBHOOK] Premium purchase completed: {planId} plan for user {userId}");
                     }
                 }
+            }
+        }
+        else if (stripeEvent.Type == Events.ChargeRefunded || stripeEvent.Type == "charge.refunded")
+        {
+            // Handle refund
+            var charge = stripeEvent.Data.Object as Charge;
+            if (charge != null)
+            {
+                string? customerName = null;
+                string? customerEmail = charge.BillingDetails?.Email;
+                string? last4Digits = charge.PaymentMethodDetails?.Card?.Last4;
+                string? paymentMethod = charge.PaymentMethodDetails?.Card?.Brand;
+                decimal? amount = charge.AmountRefunded / 100m; // Convert from cents
+                string? currency = charge.Currency?.ToUpper();
+                
+                // Get customer name if available
+                if (!string.IsNullOrWhiteSpace(charge.CustomerId))
+                {
+                    try
+                    {
+                        var customerService = new CustomerService();
+                        var customer = await customerService.GetAsync(charge.CustomerId);
+                        if (customer != null)
+                        {
+                            customerName = customer.Name;
+                            if (string.IsNullOrWhiteSpace(customerEmail))
+                            {
+                                customerEmail = customer.Email;
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"[STRIPE WEBHOOK] Error fetching customer for refund: {ex.Message}");
+                    }
+                }
+                
+                await eventLogService.LogEventAsync(new EventLogEntry
+                {
+                    EventType = "REFUND",
+                    UserId = charge.Metadata?.GetValueOrDefault("userId") ?? "unknown",
+                    Email = customerEmail,
+                    CustomerName = customerName,
+                    Last4Digits = last4Digits,
+                    PaymentMethod = paymentMethod,
+                    Amount = amount,
+                    Currency = currency ?? "USD",
+                    StripePaymentIntentId = charge.PaymentIntentId,
+                    StripeCustomerId = charge.CustomerId,
+                    Status = "REFUNDED",
+                    Details = $"Stripe refund: Charge {charge.Id}, Amount: {amount} {currency}"
+                });
+                
+                Console.WriteLine($"[STRIPE WEBHOOK] Refund processed: {amount} {currency} for charge {charge.Id}");
             }
         }
         
@@ -2803,10 +2990,77 @@ app.MapPost("/api/credits/complete-purchase", async (CompletePurchaseRequest req
                                     // Continue anyway - purchase still succeeded
                                 }
                                 
+                                // Get customer details from Stripe
+                                string? customerName = null;
+                                string? customerEmail = session.CustomerEmail;
+                                string? last4Digits = null;
+                                string? paymentMethod = null;
+                                decimal? amount = null;
+                                string? currency = null;
+                                string? paymentIntentId = session.PaymentIntentId;
+                                string? customerId = session.CustomerId;
+                                
+                                // Fetch payment intent to get card details
+                                if (!string.IsNullOrWhiteSpace(paymentIntentId) && !string.IsNullOrWhiteSpace(stripeSecretKey))
+                                {
+                                    try
+                                    {
+                                        var paymentIntentService = new PaymentIntentService();
+                                        var paymentIntent = await paymentIntentService.GetAsync(paymentIntentId);
+                                        
+                                        if (paymentIntent != null)
+                                        {
+                                            amount = paymentIntent.Amount / 100m; // Convert from cents
+                                            currency = paymentIntent.Currency?.ToUpper();
+                                            
+                                            // Get payment method details
+                                            if (!string.IsNullOrWhiteSpace(paymentIntent.PaymentMethodId))
+                                            {
+                                                var paymentMethodService = new PaymentMethodService();
+                                                var paymentMethodObj = await paymentMethodService.GetAsync(paymentIntent.PaymentMethodId);
+                                                
+                                                if (paymentMethodObj != null)
+                                                {
+                                                    paymentMethod = paymentMethodObj.Card?.Brand;
+                                                    last4Digits = paymentMethodObj.Card?.Last4;
+                                                    
+                                                    // Get customer name if available
+                                                    if (!string.IsNullOrWhiteSpace(customerId))
+                                                    {
+                                                        var customerService = new CustomerService();
+                                                        var customer = await customerService.GetAsync(customerId);
+                                                        if (customer != null)
+                                                        {
+                                                            customerName = customer.Name;
+                                                            if (string.IsNullOrWhiteSpace(customerEmail))
+                                                            {
+                                                                customerEmail = customer.Email;
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                    catch (Exception ex)
+                                    {
+                                        Console.WriteLine($"[STRIPE] Error fetching payment details: {ex.Message}");
+                                    }
+                                }
+                                
                                 await eventLogService.LogEventAsync(new EventLogEntry
                                 {
                                     EventType = "PURCHASE",
                                     UserId = userIdForSave,
+                                    Email = customerEmail,
+                                    CustomerName = customerName,
+                                    Last4Digits = last4Digits,
+                                    PaymentMethod = paymentMethod,
+                                    Amount = amount ?? tier.Price,
+                                    Currency = currency ?? "USD",
+                                    StripeSessionId = session.Id,
+                                    StripePaymentIntentId = paymentIntentId,
+                                    StripeCustomerId = customerId,
                                     Status = "SUCCESS",
                                     Details = $"Stripe session completed: Purchased {tier.Credits} credits from tier {tier.Name}, session={session.Id}"
                                 });

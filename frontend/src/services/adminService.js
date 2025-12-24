@@ -354,3 +354,14 @@ export const replyToSupportTicket = async (ticketId, replyMessage) => {
   }
 }
 
+// GET /admin/stripe-activities - Get Stripe purchase and refund activities
+export const getStripeActivities = async () => {
+  try {
+    const response = await axios.get(`${API_URL}/api/admin/stripe-activities`, getAdminParams())
+    return response.data
+  } catch (error) {
+    console.error('Error fetching Stripe activities:', error)
+    throw error
+  }
+}
+

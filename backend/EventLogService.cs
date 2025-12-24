@@ -217,12 +217,20 @@ public class EventLogService
 /// </summary>
 public class EventLogEntry
 {
-    public string EventType { get; set; } = string.Empty; // TRANSLATE, PURCHASE, TOKEN_ISSUED, etc.
+    public string EventType { get; set; } = string.Empty; // TRANSLATE, PURCHASE, TOKEN_ISSUED, REFUND, etc.
     public string UserId { get; set; } = string.Empty;
     public string? Email { get; set; }
+    public string? CustomerName { get; set; } // Customer name from Stripe
+    public string? Last4Digits { get; set; } // Last 4 digits of credit card
+    public string? PaymentMethod { get; set; } // Card brand (visa, mastercard, etc.)
+    public decimal? Amount { get; set; } // Payment amount
+    public string? Currency { get; set; } // Currency code
+    public string? StripeSessionId { get; set; } // Stripe session ID
+    public string? StripePaymentIntentId { get; set; } // Stripe payment intent ID
+    public string? StripeCustomerId { get; set; } // Stripe customer ID
     public string? Endpoint { get; set; }
     public string? Details { get; set; }
-    public string? Status { get; set; } // SUCCESS, ERROR, etc.
+    public string? Status { get; set; } // SUCCESS, ERROR, REFUNDED, etc.
     public DateTime Timestamp { get; set; } = DateTime.UtcNow;
 }
 

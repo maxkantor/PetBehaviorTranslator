@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { FaPaw, FaUserShield, FaCrown, FaUsers, FaToggleOn, FaToggleOff, FaSync, FaCoins, FaGift, FaHistory, FaRedo, FaTrash, FaChartBar, FaCog, FaKey, FaEnvelope, FaSignOutAlt, FaHeadset, FaReply, FaCheckCircle, FaCopy } from 'react-icons/fa'
 import { getUserId } from '../services/premiumService'
-import { checkAdmin, getAllUsers, setPremiumStatus, setPremiumPlan, removePremiumStatus, grantCredits, getActivities, resetUserActivities, resetAllActivities, adminConnect, getAdminDashboard, updateAdminConfig, createOverrideToken, adminLogout, setMyCredits, setUserCredits, getAllSupportTickets, replyToSupportTicket } from '../services/adminService'
+import { checkAdmin, getAllUsers, setPremiumStatus, setPremiumPlan, removePremiumStatus, grantCredits, getActivities, resetUserActivities, resetAllActivities, adminConnect, getAdminDashboard, updateAdminConfig, createOverrideToken, adminLogout, setMyCredits, setUserCredits, getAllSupportTickets, replyToSupportTicket, getStripeActivities } from '../services/adminService'
 import { getCreditToken } from '../services/creditService'
 import axios from 'axios'
 import styles from './Admin.module.css'
@@ -34,6 +34,9 @@ function Admin() {
   const [userTokens, setUserTokens] = useState({}) // userId -> { token, credits }
   const [showingToken, setShowingToken] = useState({}) // userId -> boolean
   const [selectedUserForCredits, setSelectedUserForCredits] = useState('') // User selected for credit management
+  const [stripeActivities, setStripeActivities] = useState([])
+  const [showStripeActivities, setShowStripeActivities] = useState(false)
+  const [loadingStripeActivities, setLoadingStripeActivities] = useState(false)
 
   const handleLogout = () => {
     adminLogout()
@@ -62,6 +65,7 @@ function Admin() {
         await loadDashboard()
         await loadUsers()
         await loadSupportTickets()
+        await loadStripeActivities()
         setIsAdmin(true) // If they got here, they're authenticated
       } catch (error) {
         console.error('Admin initialization error:', error)
@@ -350,6 +354,23 @@ function Admin() {
         console.error('Error loading support tickets:', error)
         // Don't show error message on initial load if tickets endpoint doesn't exist yet
       }
+    }
+  }
+
+  const loadStripeActivities = async () => {
+    setLoadingStripeActivities(true)
+    try {
+      const data = await getStripeActivities()
+      setStripeActivities(data.activities || [])
+    } catch (error) {
+      if (error.response?.status === 401) {
+        showMessage('Access denied. Admin access required.', 'error')
+      } else {
+        console.error('Error loading Stripe activities:', error)
+        // Don't show error message on initial load
+      }
+    } finally {
+      setLoadingStripeActivities(false)
     }
   }
 
@@ -1214,6 +1235,172 @@ function Admin() {
           </div>
         </div>
       )}
+
+      {/* Stripe Activities Section */}
+      <div className={styles.section}>
+        <h2 className={styles.sectionTitle}>
+          <FaCoins /> Stripe Activities
+        </h2>
+        <div className={styles.card}>
+          <div className={styles.cardActions}>
+            <button 
+              onClick={() => {
+                setShowStripeActivities(!showStripeActivities)
+                if (!showStripeActivities) {
+                  loadStripeActivities()
+                }
+              }}
+              className={styles.btnPrimary}
+            >
+              <FaCoins /> {showStripeActivities ? 'Hide' : 'Show'} Stripe Activities
+            </button>
+            <button 
+              onClick={loadStripeActivities}
+              className={styles.btnSecondary}
+              disabled={loadingStripeActivities}
+            >
+              <FaSync className={loadingStripeActivities ? styles.spinning : ''} /> Refresh
+            </button>
+          </div>
+          
+          {showStripeActivities && (
+            <div style={{ marginTop: '1.5rem' }}>
+              {loadingStripeActivities ? (
+                <p className={styles.emptyState}>Loading Stripe activities...</p>
+              ) : stripeActivities.length === 0 ? (
+                <p className={styles.emptyState}>No Stripe activities found</p>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                  {stripeActivities.map((activity, idx) => (
+                    <div 
+                      key={idx} 
+                      style={{ 
+                        padding: '1.5rem', 
+                        background: activity.eventType === 'REFUND' 
+                          ? 'rgba(220, 53, 69, 0.1)' 
+                          : 'rgba(78, 205, 196, 0.1)', 
+                        borderRadius: '12px',
+                        border: activity.eventType === 'REFUND' 
+                          ? '2px solid #dc3545' 
+                          : '2px solid #4ecdc4'
+                      }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem', flexWrap: 'wrap', gap: '1rem' }}>
+                        <div style={{ flex: 1, minWidth: '300px' }}>
+                          <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', marginBottom: '0.5rem', flexWrap: 'wrap' }}>
+                            <h3 style={{ margin: 0, fontSize: '1.2rem' }}>
+                              {activity.eventType === 'PURCHASE' ? '💳 Purchase' : activity.eventType === 'PREMIUM_PURCHASE' ? '⭐ Premium Purchase' : '↩️ Refund'}
+                            </h3>
+                            <span style={{ 
+                              padding: '0.25rem 0.75rem', 
+                              borderRadius: '12px', 
+                              fontSize: '0.85rem',
+                              background: activity.status === 'SUCCESS' 
+                                ? 'rgba(78, 205, 196, 0.3)' 
+                                : activity.status === 'REFUNDED'
+                                ? 'rgba(220, 53, 69, 0.3)'
+                                : 'rgba(255, 193, 7, 0.3)',
+                              color: activity.status === 'SUCCESS' 
+                                ? '#4ecdc4' 
+                                : activity.status === 'REFUNDED'
+                                ? '#dc3545'
+                                : '#ffc107'
+                            }}>
+                              {activity.status}
+                            </span>
+                          </div>
+                          
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '0.75rem', marginTop: '1rem' }}>
+                            {activity.customerName && (
+                              <div>
+                                <strong style={{ fontSize: '0.85rem', opacity: 0.8 }}>Customer Name:</strong>
+                                <div style={{ fontSize: '0.95rem', marginTop: '0.25rem' }}>{activity.customerName}</div>
+                              </div>
+                            )}
+                            {activity.email && (
+                              <div>
+                                <strong style={{ fontSize: '0.85rem', opacity: 0.8 }}>Email:</strong>
+                                <div style={{ fontSize: '0.95rem', marginTop: '0.25rem' }}>{activity.email}</div>
+                              </div>
+                            )}
+                            {activity.userId && (
+                              <div>
+                                <strong style={{ fontSize: '0.85rem', opacity: 0.8 }}>User ID:</strong>
+                                <div style={{ fontSize: '0.95rem', marginTop: '0.25rem', fontFamily: 'monospace' }}>{activity.userId}</div>
+                              </div>
+                            )}
+                            {activity.amount !== null && activity.amount !== undefined && (
+                              <div>
+                                <strong style={{ fontSize: '0.85rem', opacity: 0.8 }}>Amount:</strong>
+                                <div style={{ fontSize: '0.95rem', marginTop: '0.25rem', fontWeight: 'bold' }}>
+                                  {activity.currency || 'USD'} ${activity.amount.toFixed(2)}
+                                </div>
+                              </div>
+                            )}
+                            {activity.last4Digits && (
+                              <div>
+                                <strong style={{ fontSize: '0.85rem', opacity: 0.8 }}>Card Last 4:</strong>
+                                <div style={{ fontSize: '0.95rem', marginTop: '0.25rem', fontFamily: 'monospace' }}>
+                                  {activity.paymentMethod ? `${activity.paymentMethod.toUpperCase()} ` : ''}•••• {activity.last4Digits}
+                                </div>
+                              </div>
+                            )}
+                            {activity.timestamp && (
+                              <div>
+                                <strong style={{ fontSize: '0.85rem', opacity: 0.8 }}>Date:</strong>
+                                <div style={{ fontSize: '0.95rem', marginTop: '0.25rem' }}>
+                                  {new Date(activity.timestamp).toLocaleString()}
+                                </div>
+                              </div>
+                            )}
+                            {activity.stripeSessionId && (
+                              <div>
+                                <strong style={{ fontSize: '0.85rem', opacity: 0.8 }}>Session ID:</strong>
+                                <div style={{ fontSize: '0.85rem', marginTop: '0.25rem', fontFamily: 'monospace', wordBreak: 'break-all' }}>
+                                  {activity.stripeSessionId}
+                                </div>
+                              </div>
+                            )}
+                            {activity.stripePaymentIntentId && (
+                              <div>
+                                <strong style={{ fontSize: '0.85rem', opacity: 0.8 }}>Payment Intent:</strong>
+                                <div style={{ fontSize: '0.85rem', marginTop: '0.25rem', fontFamily: 'monospace', wordBreak: 'break-all' }}>
+                                  {activity.stripePaymentIntentId}
+                                </div>
+                              </div>
+                            )}
+                            {activity.stripeCustomerId && (
+                              <div>
+                                <strong style={{ fontSize: '0.85rem', opacity: 0.8 }}>Customer ID:</strong>
+                                <div style={{ fontSize: '0.85rem', marginTop: '0.25rem', fontFamily: 'monospace', wordBreak: 'break-all' }}>
+                                  {activity.stripeCustomerId}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                          
+                          {activity.details && (
+                            <div style={{ 
+                              marginTop: '1rem', 
+                              padding: '0.75rem', 
+                              background: 'rgba(255,255,255,0.1)', 
+                              borderRadius: '8px',
+                              fontSize: '0.9rem',
+                              opacity: 0.9
+                            }}>
+                              <strong>Details:</strong> {activity.details}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
 
       {/* Support Tickets Section */}
       <div className={styles.section}>
