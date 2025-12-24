@@ -447,18 +447,6 @@ function Home() {
             )}
           </button>
 
-          {/* Action Buttons Inside Form */}
-          <div className={styles.formActionButtons}>
-            <button onClick={() => setShowCreditsModal(true)} className={styles.premiumLink}>
-              <FaCoins />
-              Buy Credits
-            </button>
-            <button onClick={() => setShowSupportModal(true)} className={styles.supportLinkSecondary}>
-              <FaHeadset />
-              Need Help?
-            </button>
-          </div>
-
           {/* How This Works */}
           <div className={styles.howItWorks}>
             <h3 className={styles.howItWorksTitle}>How This Works</h3>
@@ -651,6 +639,17 @@ function Home() {
 
       <footer className={styles.footer}>
         <div className={styles.footerContent}>
+          <div className={styles.footerLinks}>
+            <button onClick={() => setShowCreditsModal(true)} className={styles.premiumLink}>
+              <FaCoins />
+              Buy Credits
+            </button>
+            <button onClick={() => setShowSupportModal(true)} className={styles.supportLinkSecondary}>
+              <FaHeadset />
+              Need Help?
+            </button>
+          </div>
+
           <div className={styles.copyright}>
             <FaCopyright className={styles.copyrightIcon} />
             <span>{new Date().getFullYear()} Pet Behavior Translator. All rights reserved.</span>
