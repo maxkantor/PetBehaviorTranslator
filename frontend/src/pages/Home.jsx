@@ -402,7 +402,7 @@ function Home() {
             placeholder="Describe your pet's behavior... e.g., 'My dog barks every time someone knocks on the door'"
             value={behavior}
             onChange={(e) => setBehavior(e.target.value)}
-            rows={6}
+            rows={4}
           />
 
           {/* Social Proof */}
