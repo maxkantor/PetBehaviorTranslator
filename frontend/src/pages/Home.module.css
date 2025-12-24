@@ -685,12 +685,12 @@
 
 .petImage {
   position: fixed;
-  width: 100px;
-  height: 100px;
+  width: 200px;
+  height: 200px;
   object-fit: cover;
   border-radius: 50%;
-  border: 3px solid rgba(255, 255, 255, 0.4);
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+  border: 5px solid rgba(255, 255, 255, 0.4);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
   opacity: 0.75;
   z-index: 0;
   animation: float 8s ease-in-out infinite;
@@ -991,8 +991,8 @@
   }
 
   .petImage {
-    width: 80px;
-    height: 80px;
+    width: 120px;
+    height: 120px;
     opacity: 0.6;
   }
 
