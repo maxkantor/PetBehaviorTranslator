@@ -163,7 +163,7 @@
 }
 
 .content {
-  max-width: 1400px;
+  max-width: 900px;
   margin: 0 auto;
   position: relative;
   z-index: 2;
@@ -174,29 +174,27 @@
   flex: 1;
   display: flex;
   flex-direction: column;
-  padding: 0 2rem;
 }
 
 .inputSection {
   background: rgba(255, 255, 255, 0.95);
-  border-radius: 24px;
-  padding: 3.5rem;
+  border-radius: 16px;
+  padding: 1.75rem;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
   margin-bottom: 2rem;
-  width: 100%;
 }
 
 .textarea {
   width: 100%;
-  padding: 1.5rem;
+  padding: 1rem;
   border: 3px solid #ff6b9d;
-  border-radius: 14px;
-  font-size: 1.1rem;
+  border-radius: 12px;
+  font-size: 1rem;
   font-family: inherit;
   resize: vertical;
   transition: all 0.3s ease;
   background: #fff;
-  min-height: 180px;
+  min-height: 140px;
   overflow-y: auto;
   scrollbar-width: none; /* Firefox */
   -ms-overflow-style: none; /* IE and Edge */
