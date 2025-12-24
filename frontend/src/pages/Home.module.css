@@ -63,7 +63,7 @@
 }
 
 .title {
-  font-size: 2rem;
+  font-size: 2.25rem;
   font-weight: 800;
   color: #fff;
   text-shadow: 3px 3px 6px rgba(0, 0, 0, 0.3);
@@ -76,7 +76,7 @@
 }
 
 .titleIcon {
-  font-size: 2.25rem;
+  font-size: 2.5rem;
   color: #ff6b9d;
   filter: drop-shadow(2px 2px 4px rgba(0, 0, 0, 0.3));
   animation: bounce 2s infinite;
@@ -92,7 +92,7 @@
 }
 
 .subtitle {
-  font-size: 0.95rem;
+  font-size: 1.05rem;
   color: #fff;
   text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
   font-weight: 300;
@@ -109,7 +109,7 @@
 }
 
 .creditExplanation {
-  font-size: 0.7rem;
+  font-size: 0.75rem;
   color: rgba(255, 255, 255, 0.9);
   text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.2);
   margin: 0;
@@ -126,7 +126,7 @@
   color: #333;
   font-weight: 600;
   box-shadow: 0 4px 12px rgba(255, 230, 109, 0.4);
-  font-size: 0.85rem;
+  font-size: 0.9rem;
 }
 
 .premiumBadge .crownIcon {
@@ -146,7 +146,7 @@
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   flex-wrap: wrap;
   justify-content: center;
-  font-size: 0.85rem;
+  font-size: 0.9rem;
 }
 
 .upgradeLink {
@@ -194,10 +194,10 @@
 
 .textarea {
   width: 100%;
-  padding: 0.75rem;
+  padding: 0.85rem;
   border: 2px solid #ff6b9d;
   border-radius: 12px;
-  font-size: 0.9rem;
+  font-size: 0.95rem;
   font-family: inherit;
   resize: none;
   transition: all 0.3s ease;
@@ -231,14 +231,14 @@
 }
 
 .socialProofText {
-  font-size: 0.75rem;
+  font-size: 0.8rem;
   color: #666;
   margin: 0 0 0.15rem 0;
   font-weight: 600;
 }
 
 .socialProofPets {
-  font-size: 0.7rem;
+  font-size: 0.75rem;
   color: #888;
   margin: 0;
 }
@@ -249,7 +249,7 @@
 }
 
 .presetsLabel {
-  font-size: 0.85rem;
+  font-size: 0.9rem;
   color: #333;
   margin-bottom: 0.5rem;
   font-weight: 700;
@@ -270,7 +270,7 @@
   color: #333;
   border: 2px solid #ffb3d1;
   border-radius: 10px;
-  font-size: 0.8rem;
+  font-size: 0.85rem;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.3s ease;
@@ -295,12 +295,12 @@
 
 .translateButton {
   width: 100%;
-  padding: 0.75rem;
+  padding: 0.85rem;
   background: linear-gradient(135deg, #4ecdc4 0%, #44a08d 100%);
   color: white;
   border: none;
   border-radius: 10px;
-  font-size: 1rem;
+  font-size: 1.05rem;
   font-weight: 700;
   cursor: pointer;
   transition: all 0.3s ease;
@@ -365,14 +365,14 @@
 }
 
 .howItWorksTitle {
-  font-size: 0.8rem;
+  font-size: 0.85rem;
   font-weight: 700;
   color: #333;
   margin: 0 0 0.3rem 0;
 }
 
 .howItWorksText {
-  font-size: 0.75rem;
+  font-size: 0.8rem;
   line-height: 1.4;
   color: #555;
   margin: 0;
