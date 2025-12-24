@@ -39,6 +39,7 @@ function Home() {
   const [isAdmin, setIsAdmin] = useState(false)
   const [showSupportModal, setShowSupportModal] = useState(false)
   const [showCreditsModal, setShowCreditsModal] = useState(false)
+  const [showResultsModal, setShowResultsModal] = useState(false)
 
   // Load credit balance and check admin status on component mount
   useEffect(() => {
@@ -206,6 +207,7 @@ function Home() {
       setResults(response.data)
       setError(null)
       setRetryAfterSeconds(null)
+      setShowResultsModal(true) // Show results in modal
       
       // Track translation event
       const userId = getUserId()
@@ -532,109 +534,6 @@ function Home() {
           </div>
         )}
 
-        {results && (
-          <div className={styles.results}>
-            <div className={styles.resultCard}>
-              <h3 className={styles.resultTitle}>
-                <FaPaw className={styles.resultIcon} />
-                Likely Cause
-              </h3>
-              <p className={styles.resultText}>{results.cause}</p>
-            </div>
-
-            <div className={styles.resultCard}>
-              <h3 className={styles.resultTitle}>
-                <FaLightbulb className={styles.resultIcon} />
-                Quick Fix
-              </h3>
-              <p className={styles.resultText}>{results.quickFix}</p>
-            </div>
-
-            <div className={styles.resultCard}>
-              <h3 className={styles.resultTitle}>
-                <FaListOl className={styles.resultIcon} />
-                Step-by-Step Fix
-              </h3>
-              <ul className={styles.stepsList}>
-                {results.steps.map((step, idx) => (
-                  <li key={idx}>
-                    <span className={styles.stepNumber}>{idx + 1}</span>
-                    {step}
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            <div className={styles.resultCard}>
-              <h3 className={styles.resultTitle}>
-                <FaExclamationTriangle className={styles.resultIcon} />
-                Vet Warning Signs
-              </h3>
-              <p className={styles.resultText}>{results.vetWarning}</p>
-            </div>
-
-            <div className={styles.resultCard}>
-              <h3 className={styles.resultTitle}>
-                <FaShoppingCart className={styles.resultIcon} />
-                Recommended Products
-              </h3>
-              <ul className={styles.productsList}>
-                {results.products.map((product, idx) => (
-                  <li key={idx}>
-                    {product.url ? (
-                      <a 
-                        href={product.url} 
-                        className={styles.productLink}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={() => {
-                          // Track affiliate link clicks (optional analytics)
-                          if (product.isAffiliateLink && window.gtag) {
-                            window.gtag('event', 'affiliate_click', {
-                              'product_name': product.name,
-                              'link_url': product.url
-                            });
-                          }
-                        }}
-                      >
-                        <FaHeart className={styles.productIcon} />
-                        {product.name}
-                        <span className={styles.externalLinkIcon}> ↗</span>
-                      </a>
-                    ) : (
-                      <span className={styles.productText}>
-                        <FaHeart className={styles.productIcon} />
-                        {product.name}
-                      </span>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            {/* Premium Features: Advanced Insights */}
-            {results.isPremium && results.advancedInsights && (
-              <div className={styles.resultCard}>
-                <h3 className={styles.resultTitle}>
-                  <FaCrown className={styles.resultIcon} />
-                  Advanced Insights
-                </h3>
-                <p className={styles.resultText}>{results.advancedInsights}</p>
-              </div>
-            )}
-
-            {/* Premium Features: Prevention Tips */}
-            {results.isPremium && results.preventionTips && (
-              <div className={styles.resultCard}>
-                <h3 className={styles.resultTitle}>
-                  <FaPaw className={styles.resultIcon} />
-                  Prevention Tips
-                </h3>
-                <p className={styles.resultText}>{results.preventionTips}</p>
-              </div>
-            )}
-          </div>
-        )}
       </div>
 
       <footer className={styles.footer}>
@@ -683,6 +582,123 @@ function Home() {
               <FaTimes />
             </button>
             <Credits onClose={() => setShowCreditsModal(false)} />
+          </div>
+        </div>
+      )}
+
+      {/* Results Modal */}
+      {showResultsModal && results && (
+        <div className={styles.modalOverlay} onClick={() => setShowResultsModal(false)}>
+          <div className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
+            <button className={styles.modalClose} onClick={() => setShowResultsModal(false)}>
+              <FaTimes />
+            </button>
+            <div className={styles.resultsModalContent}>
+              <h2 className={styles.resultsModalTitle}>
+                <FaPaw /> Analysis Results
+              </h2>
+              <div className={styles.results}>
+                <div className={styles.resultCard}>
+                  <h3 className={styles.resultTitle}>
+                    <FaPaw className={styles.resultIcon} />
+                    Likely Cause
+                  </h3>
+                  <p className={styles.resultText}>{results.cause}</p>
+                </div>
+
+                <div className={styles.resultCard}>
+                  <h3 className={styles.resultTitle}>
+                    <FaLightbulb className={styles.resultIcon} />
+                    Quick Fix
+                  </h3>
+                  <p className={styles.resultText}>{results.quickFix}</p>
+                </div>
+
+                <div className={styles.resultCard}>
+                  <h3 className={styles.resultTitle}>
+                    <FaListOl className={styles.resultIcon} />
+                    Step-by-Step Fix
+                  </h3>
+                  <ul className={styles.stepsList}>
+                    {results.steps.map((step, idx) => (
+                      <li key={idx}>
+                        <span className={styles.stepNumber}>{idx + 1}</span>
+                        {step}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+
+                <div className={styles.resultCard}>
+                  <h3 className={styles.resultTitle}>
+                    <FaExclamationTriangle className={styles.resultIcon} />
+                    Vet Warning Signs
+                  </h3>
+                  <p className={styles.resultText}>{results.vetWarning}</p>
+                </div>
+
+                <div className={styles.resultCard}>
+                  <h3 className={styles.resultTitle}>
+                    <FaShoppingCart className={styles.resultIcon} />
+                    Recommended Products
+                  </h3>
+                  <ul className={styles.productsList}>
+                    {results.products.map((product, idx) => (
+                      <li key={idx}>
+                        {product.url ? (
+                          <a 
+                            href={product.url} 
+                            className={styles.productLink}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={() => {
+                              // Track affiliate link clicks (optional analytics)
+                              if (product.isAffiliateLink && window.gtag) {
+                                window.gtag('event', 'affiliate_click', {
+                                  'product_name': product.name,
+                                  'link_url': product.url
+                                });
+                              }
+                            }}
+                          >
+                            <FaHeart className={styles.productIcon} />
+                            {product.name}
+                            <span className={styles.externalLinkIcon}> ↗</span>
+                          </a>
+                        ) : (
+                          <span className={styles.productText}>
+                            <FaHeart className={styles.productIcon} />
+                            {product.name}
+                          </span>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+
+                {/* Premium Features: Advanced Insights */}
+                {results.isPremium && results.advancedInsights && (
+                  <div className={styles.resultCard}>
+                    <h3 className={styles.resultTitle}>
+                      <FaCrown className={styles.resultIcon} />
+                      Advanced Insights
+                    </h3>
+                    <p className={styles.resultText}>{results.advancedInsights}</p>
+                  </div>
+                )}
+
+                {/* Premium Features: Prevention Tips */}
+                {results.isPremium && results.preventionTips && (
+                  <div className={styles.resultCard}>
+                    <h3 className={styles.resultTitle}>
+                      <FaPaw className={styles.resultIcon} />
+                      Prevention Tips
+                    </h3>
+                    <p className={styles.resultText}>{results.preventionTips}</p>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       )}
