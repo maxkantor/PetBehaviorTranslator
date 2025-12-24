@@ -163,7 +163,7 @@
 }
 
 .content {
-  max-width: 900px;
+  max-width: 1200px;
   margin: 0 auto;
   position: relative;
   z-index: 2;
@@ -178,8 +178,8 @@
 
 .inputSection {
   background: rgba(255, 255, 255, 0.95);
-  border-radius: 16px;
-  padding: 1.75rem;
+  border-radius: 20px;
+  padding: 2.5rem;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
   margin-bottom: 2rem;
 }
