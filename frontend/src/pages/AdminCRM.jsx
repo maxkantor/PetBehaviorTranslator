@@ -6,7 +6,7 @@ import {
   FaFilter, FaSort, FaUser, FaEnvelope, FaCalendar, FaDollarSign, FaCreditCard,
   FaCheckCircle, FaTimesCircle, FaEdit, FaTrash, FaEye, FaChevronRight,
   FaChevronLeft, FaArrowUp, FaArrowDown, FaTicketAlt, FaShoppingCart,
-  FaPlus, FaSave, FaGift
+  FaPlus, FaSave, FaGift, FaTimes
 } from 'react-icons/fa'
 import { getUserId } from '../services/premiumService'
 import { 
@@ -28,6 +28,7 @@ function AdminCRM() {
   const [dashboardData, setDashboardData] = useState(null)
   const [supportTickets, setSupportTickets] = useState([])
   const [stripeActivities, setStripeActivities] = useState([])
+  const [recentEvents, setRecentEvents] = useState([])
   
   // CRM State
   const [activeTab, setActiveTab] = useState('dashboard')
@@ -52,6 +53,12 @@ function AdminCRM() {
   const [freeSearchLimit, setFreeSearchLimit] = useState(5)
   const [savingConfig, setSavingConfig] = useState(false)
   const [authChecked, setAuthChecked] = useState(false) // Track if we've checked auth
+  
+  // Reply modal state
+  const [replyModalOpen, setReplyModalOpen] = useState(false)
+  const [replyingToTicket, setReplyingToTicket] = useState(null)
+  const [replyMessage, setReplyMessage] = useState('')
+  const [sendingReply, setSendingReply] = useState(false)
 
   useEffect(() => {
     initializeAdmin()
@@ -139,6 +146,9 @@ function AdminCRM() {
       // Only update if we got valid data
       if (data) {
         setDashboardData(data)
+        if (data.recentEvents) {
+          setRecentEvents(data.recentEvents)
+        }
         // Load pricing tiers and free search limit for settings
         if (data.summary) {
           if (data.summary.freeSearchLimit !== undefined) {
@@ -365,12 +375,30 @@ function AdminCRM() {
 
   const handleReplyToTicket = async (ticketId, replyMessage) => {
     try {
+      setSendingReply(true)
       await replyToSupportTicket(ticketId, replyMessage)
       showMessage('Reply sent successfully!', 'success')
-      await loadSupportTickets()
+      setReplyModalOpen(false)
+      setReplyingToTicket(null)
+      setReplyMessage('')
+      await loadSupportTickets(true) // preserve existing
     } catch (error) {
       showMessage('Failed to send reply', 'error')
+    } finally {
+      setSendingReply(false)
     }
+  }
+
+  const openReplyModal = (ticket) => {
+    setReplyingToTicket(ticket)
+    setReplyMessage('')
+    setReplyModalOpen(true)
+  }
+
+  const closeReplyModal = () => {
+    setReplyModalOpen(false)
+    setReplyingToTicket(null)
+    setReplyMessage('')
   }
 
   const handleTogglePremium = async (userId, isPremium) => {
@@ -569,6 +597,216 @@ function AdminCRM() {
                 </p>
               </div>
             )}
+
+            {/* Analytics Charts */}
+            <div className={styles.dashboardSection}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                <h2>Analytics & Trends</h2>
+              </div>
+              
+              <div className={styles.chartsGrid}>
+                {/* User Growth Chart */}
+                <div className={styles.chartCard}>
+                  <h3>User Growth (Last 7 Days)</h3>
+                  <div className={styles.chartContainer}>
+                    {(() => {
+                      const last7Days = Array.from({ length: 7 }, (_, i) => {
+                        const date = new Date()
+                        date.setDate(date.getDate() - (6 - i))
+                        return date.toISOString().split('T')[0]
+                      })
+                      
+                      const userCounts = last7Days.map(date => {
+                        return recentEvents.filter(e => {
+                          const eventDate = new Date(e.timestamp).toISOString().split('T')[0]
+                          return eventDate === date && e.eventType === 'USER_CREATED'
+                        }).length
+                      })
+                      
+                      const maxCount = Math.max(...userCounts, 1)
+                      
+                      return (
+                        <div className={styles.barChart}>
+                          {last7Days.map((date, i) => {
+                            const height = (userCounts[i] / maxCount) * 100
+                            const dayName = new Date(date).toLocaleDateString('en-US', { weekday: 'short' })
+                            return (
+                              <div key={date} className={styles.barChartItem}>
+                                <div className={styles.barChartBar}>
+                                  <div 
+                                    className={styles.barChartFill}
+                                    style={{ height: `${height}%` }}
+                                    title={`${userCounts[i]} users`}
+                                  />
+                                </div>
+                                <span className={styles.barChartLabel}>{dayName}</span>
+                                <span className={styles.barChartValue}>{userCounts[i]}</span>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )
+                    })()}
+                  </div>
+                </div>
+
+                {/* Revenue Chart */}
+                <div className={styles.chartCard}>
+                  <h3>Revenue (Last 7 Days)</h3>
+                  <div className={styles.chartContainer}>
+                    {(() => {
+                      const last7Days = Array.from({ length: 7 }, (_, i) => {
+                        const date = new Date()
+                        date.setDate(date.getDate() - (6 - i))
+                        return date.toISOString().split('T')[0]
+                      })
+                      
+                      const revenue = last7Days.map(date => {
+                        return stripeActivities
+                          .filter(a => {
+                            const eventDate = new Date(a.timestamp).toISOString().split('T')[0]
+                            return eventDate === date && a.status === 'SUCCESS' && (a.eventType === 'PURCHASE' || a.eventType === 'PREMIUM_PURCHASE')
+                          })
+                          .reduce((sum, a) => sum + (a.amount || 0), 0)
+                      })
+                      
+                      const maxRevenue = Math.max(...revenue, 1)
+                      
+                      return (
+                        <div className={styles.barChart}>
+                          {last7Days.map((date, i) => {
+                            const height = (revenue[i] / maxRevenue) * 100
+                            const dayName = new Date(date).toLocaleDateString('en-US', { weekday: 'short' })
+                            return (
+                              <div key={date} className={styles.barChartItem}>
+                                <div className={styles.barChartBar}>
+                                  <div 
+                                    className={styles.barChartFill}
+                                    style={{ height: `${height}%`, background: 'linear-gradient(to top, #4ecdc4, #44a08d)' }}
+                                    title={`$${revenue[i].toFixed(2)}`}
+                                  />
+                                </div>
+                                <span className={styles.barChartLabel}>{dayName}</span>
+                                <span className={styles.barChartValue}>${revenue[i].toFixed(0)}</span>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )
+                    })()}
+                  </div>
+                </div>
+
+                {/* Activity Breakdown */}
+                <div className={styles.chartCard}>
+                  <h3>Activity Breakdown (Last 30 Days)</h3>
+                  <div className={styles.chartContainer}>
+                    {(() => {
+                      const last30Days = recentEvents.filter(e => {
+                        const eventDate = new Date(e.timestamp)
+                        const thirtyDaysAgo = new Date()
+                        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+                        return eventDate >= thirtyDaysAgo
+                      })
+                      
+                      const activityCounts = {
+                        'TRANSLATION': last30Days.filter(e => e.eventType === 'TRANSLATION').length,
+                        'PURCHASE': last30Days.filter(e => e.eventType === 'PURCHASE' || e.eventType === 'PREMIUM_PURCHASE').length,
+                        'SUPPORT': last30Days.filter(e => e.eventType === 'SUPPORT_TICKET').length,
+                        'USER_CREATED': last30Days.filter(e => e.eventType === 'USER_CREATED').length
+                      }
+                      
+                      const total = Object.values(activityCounts).reduce((sum, count) => sum + count, 0)
+                      const maxCount = Math.max(...Object.values(activityCounts), 1)
+                      
+                      return (
+                        <div className={styles.pieChart}>
+                          {Object.entries(activityCounts).map(([type, count], i) => {
+                            const percentage = total > 0 ? (count / total) * 100 : 0
+                            const colors = ['#667eea', '#4ecdc4', '#ffe66d', '#ff6b9d']
+                            return (
+                              <div key={type} className={styles.pieChartItem}>
+                                <div className={styles.pieChartBar}>
+                                  <div 
+                                    className={styles.pieChartFill}
+                                    style={{ 
+                                      width: `${percentage}%`,
+                                      background: colors[i % colors.length]
+                                    }}
+                                  />
+                                </div>
+                                <div className={styles.pieChartLabel}>
+                                  <span className={styles.pieChartDot} style={{ background: colors[i % colors.length] }} />
+                                  <span>{type.replace('_', ' ')}</span>
+                                  <span className={styles.pieChartValue}>{count} ({percentage.toFixed(1)}%)</span>
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )
+                    })()}
+                  </div>
+                </div>
+
+                {/* Translation Trends */}
+                <div className={styles.chartCard}>
+                  <h3>Translation Trends (Last 7 Days)</h3>
+                  <div className={styles.chartContainer}>
+                    {(() => {
+                      const last7Days = Array.from({ length: 7 }, (_, i) => {
+                        const date = new Date()
+                        date.setDate(date.getDate() - (6 - i))
+                        return date.toISOString().split('T')[0]
+                      })
+                      
+                      const translationCounts = last7Days.map(date => {
+                        return recentEvents.filter(e => {
+                          const eventDate = new Date(e.timestamp).toISOString().split('T')[0]
+                          return eventDate === date && e.eventType === 'TRANSLATION'
+                        }).length
+                      })
+                      
+                      const maxCount = Math.max(...translationCounts, 1)
+                      
+                      return (
+                        <div className={styles.lineChart}>
+                          <svg viewBox="0 0 400 200" className={styles.lineChartSvg}>
+                            <polyline
+                              fill="none"
+                              stroke="#667eea"
+                              strokeWidth="3"
+                              points={last7Days.map((date, i) => {
+                                const x = (i / (last7Days.length - 1)) * 380 + 10
+                                const y = 190 - (translationCounts[i] / maxCount) * 170
+                                return `${x},${y}`
+                              }).join(' ')}
+                            />
+                            {last7Days.map((date, i) => {
+                              const x = (i / (last7Days.length - 1)) * 380 + 10
+                              const y = 190 - (translationCounts[i] / maxCount) * 170
+                              return (
+                                <circle key={date} cx={x} cy={y} r="4" fill="#667eea" />
+                              )
+                            })}
+                          </svg>
+                          <div className={styles.lineChartLabels}>
+                            {last7Days.map((date, i) => {
+                              const dayName = new Date(date).toLocaleDateString('en-US', { weekday: 'short' })
+                              return (
+                                <span key={date} className={styles.lineChartLabel}>
+                                  {dayName}<br/>{translationCounts[i]}
+                                </span>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      )
+                    })()}
+                  </div>
+                </div>
+              </div>
+            </div>
 
             <div className={styles.dashboardSection}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
@@ -955,12 +1193,7 @@ function AdminCRM() {
                       <div className={styles.ticketActions}>
                         <button 
                           className={styles.btnPrimary}
-                          onClick={() => {
-                            const reply = prompt('Enter your reply:')
-                            if (reply && reply.trim()) {
-                              handleReplyToTicket(ticket.ticketId, reply)
-                            }
-                          }}
+                          onClick={() => openReplyModal(ticket)}
                         >
                           <FaReply /> Reply
                         </button>
@@ -1292,6 +1525,57 @@ function AdminCRM() {
         </Link>
         <p>&copy; 2025 Pet Behavior Translator. All rights reserved.</p>
       </footer>
+
+      {/* Reply Modal */}
+      {replyModalOpen && replyingToTicket && (
+        <div className={styles.modalOverlay} onClick={closeReplyModal}>
+          <div className={styles.replyModal} onClick={(e) => e.stopPropagation()}>
+            <div className={styles.modalHeader}>
+              <h3>Reply to Support Ticket</h3>
+              <button className={styles.modalClose} onClick={closeReplyModal}>
+                <FaTimesCircle />
+              </button>
+            </div>
+            <div className={styles.modalBody}>
+              <div className={styles.ticketInfo}>
+                <p><strong>Subject:</strong> {replyingToTicket.subject}</p>
+                <p><strong>From:</strong> {replyingToTicket.email}</p>
+                <p><strong>Ticket ID:</strong> {replyingToTicket.ticketId}</p>
+              </div>
+              <div className={styles.replyForm}>
+                <label>Your Reply *</label>
+                <textarea
+                  className={styles.replyTextarea}
+                  value={replyMessage}
+                  onChange={(e) => setReplyMessage(e.target.value)}
+                  placeholder="Enter your reply message..."
+                  rows={8}
+                />
+              </div>
+            </div>
+            <div className={styles.modalFooter}>
+              <button 
+                className={styles.btnSecondary}
+                onClick={closeReplyModal}
+                disabled={sendingReply}
+              >
+                Cancel
+              </button>
+              <button 
+                className={styles.btnPrimary}
+                onClick={() => handleReplyToTicket(replyingToTicket.ticketId, replyMessage)}
+                disabled={!replyMessage.trim() || sendingReply}
+              >
+                {sendingReply ? (
+                  <><FaSync className={styles.spinning} /> Sending...</>
+                ) : (
+                  <><FaReply /> Send Reply</>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

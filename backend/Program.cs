@@ -2033,8 +2033,22 @@ string? MaskEmail(string? email)
 }
 
 // Premium Feature 2: Priority Support
-// In-memory support tickets (replace with database in production)
+// Support tickets are now persisted in DynamoDB
+// Keep in-memory cache for quick access, but load from DynamoDB on startup
 var supportTickets = new List<SupportTicket>();
+
+// Load existing tickets from DynamoDB on startup
+try
+{
+    var existingTickets = await dynamoDBService.GetAllSupportTicketsAsync();
+    supportTickets = existingTickets;
+    Console.WriteLine($"[SUPPORT] Loaded {supportTickets.Count} support tickets from DynamoDB");
+}
+catch (Exception ex)
+{
+    Console.WriteLine($"[SUPPORT] Warning: Could not load tickets from DynamoDB: {ex.Message}");
+    Console.WriteLine($"[SUPPORT] Starting with empty ticket list. Tickets will be saved going forward.");
+}
 
 app.MapPost("/api/support/contact", async (SupportRequest request) =>
 {
@@ -2090,6 +2104,19 @@ app.MapPost("/api/support/contact", async (SupportRequest request) =>
         Status = "Open"
     };
     
+    // Save to DynamoDB
+    try
+    {
+        await dynamoDBService.SaveSupportTicketAsync(ticket);
+        Console.WriteLine($"[SUPPORT] ✅ Saved ticket {ticket.TicketId} to DynamoDB");
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"[SUPPORT] ⚠️ Warning: Could not save ticket to DynamoDB: {ex.Message}");
+        Console.WriteLine($"[SUPPORT] Ticket will be kept in memory only.");
+    }
+    
+    // Also keep in memory for quick access
     supportTickets.Add(ticket);
     
     // Send email notifications (if configured)
@@ -2116,10 +2143,24 @@ app.MapPost("/api/support/contact", async (SupportRequest request) =>
 .WithName("CreateSupportTicket")
 .WithOpenApi();
 
-app.MapGet("/api/support/tickets/{userId}", (string userId) =>
+app.MapGet("/api/support/tickets/{userId}", async (string userId) =>
 {
-    var userTickets = supportTickets
-        .Where(t => t.UserId == userId)
+    // Try to get from DynamoDB first, fallback to in-memory
+    List<SupportTicket> tickets;
+    try
+    {
+        var allTickets = await dynamoDBService.GetAllSupportTicketsAsync();
+        tickets = allTickets.Where(t => t.UserId == userId).ToList();
+        // Sync to in-memory cache
+        supportTickets = allTickets;
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"[SUPPORT] Could not load tickets from DynamoDB, using in-memory: {ex.Message}");
+        tickets = supportTickets.Where(t => t.UserId == userId).ToList();
+    }
+    
+    var userTickets = tickets
         .OrderByDescending(t => t.CreatedAt)
         .Select(t => new
         {
@@ -2157,7 +2198,22 @@ app.MapGet("/api/support/tickets", async (HttpContext context) =>
         }
     }
     
-    var allTickets = supportTickets
+    // Try to get from DynamoDB first, fallback to in-memory
+    List<SupportTicket> allTickets;
+    try
+    {
+        allTickets = await dynamoDBService.GetAllSupportTicketsAsync();
+        // Sync to in-memory cache
+        supportTickets = allTickets;
+        Console.WriteLine($"[SUPPORT] Loaded {allTickets.Count} tickets from DynamoDB for admin view");
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"[SUPPORT] Could not load tickets from DynamoDB, using in-memory: {ex.Message}");
+        allTickets = supportTickets;
+    }
+    
+    var tickets = allTickets
         .OrderByDescending(t => t.CreatedAt)
         .Select(t => new
         {
@@ -2173,7 +2229,7 @@ app.MapGet("/api/support/tickets", async (HttpContext context) =>
         })
         .ToList();
     
-    return Results.Ok(new { tickets = allTickets });
+    return Results.Ok(new { tickets = tickets });
 })
 .WithName("GetAllSupportTickets")
 .WithOpenApi();
@@ -2209,7 +2265,36 @@ app.MapPost("/api/support/reply", async (SupportReplyRequest request, HttpContex
         return Results.BadRequest(new { message = "Reply message is required" });
     }
     
-    var ticket = supportTickets.FirstOrDefault(t => t.TicketId == request.TicketId);
+    // Try to get from DynamoDB first, fallback to in-memory
+    SupportTicket? ticket = null;
+    try
+    {
+        ticket = await dynamoDBService.GetSupportTicketAsync(request.TicketId);
+        if (ticket != null)
+        {
+            // Update in-memory cache
+            var existingIndex = supportTickets.FindIndex(t => t.TicketId == request.TicketId);
+            if (existingIndex >= 0)
+            {
+                supportTickets[existingIndex] = ticket;
+            }
+            else
+            {
+                supportTickets.Add(ticket);
+            }
+        }
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"[SUPPORT] Could not load ticket from DynamoDB, trying in-memory: {ex.Message}");
+    }
+    
+    // Fallback to in-memory if not found in DynamoDB
+    if (ticket == null)
+    {
+        ticket = supportTickets.FirstOrDefault(t => t.TicketId == request.TicketId);
+    }
+    
     if (ticket == null)
     {
         return Results.NotFound(new { message = "Ticket not found" });
@@ -2217,6 +2302,17 @@ app.MapPost("/api/support/reply", async (SupportReplyRequest request, HttpContex
     
     // Update ticket status
     ticket.Status = "Replied";
+    
+    // Save updated ticket to DynamoDB
+    try
+    {
+        await dynamoDBService.SaveSupportTicketAsync(ticket);
+        Console.WriteLine($"[SUPPORT] ✅ Saved updated ticket {ticket.TicketId} to DynamoDB");
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"[SUPPORT] ⚠️ Warning: Could not save updated ticket to DynamoDB: {ex.Message}");
+    }
     
     // Send reply email to customer
     try

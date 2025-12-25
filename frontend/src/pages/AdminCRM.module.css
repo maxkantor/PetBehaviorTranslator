@@ -1212,7 +1212,395 @@
   font-size: 0.9rem;
 }
 
+/* Reply Modal */
+.modalOverlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 1rem;
+  overflow-y: auto;
+  box-sizing: border-box;
+}
+
+.replyModal {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  width: 100%;
+  max-width: 600px;
+  max-height: calc(100vh - 2rem);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.replyModal .modalHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.5rem;
+  border-bottom: 2px solid #e5e7eb;
+  flex-shrink: 0;
+}
+
+.replyModal .modalHeader h3 {
+  margin: 0;
+  color: #1f2937;
+  font-size: 1.25rem;
+}
+
+.modalClose {
+  background: transparent;
+  border: none;
+  color: #6b7280;
+  font-size: 1.5rem;
+  cursor: pointer;
+  padding: 0.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  transition: all 0.2s;
+}
+
+.modalClose:hover {
+  background: #f3f4f6;
+  color: #1f2937;
+}
+
+.replyModal .modalBody {
+  padding: 1.5rem;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+}
+
+.ticketInfo {
+  background: #f9fafb;
+  border-radius: 8px;
+  padding: 1rem;
+  margin-bottom: 1.5rem;
+  border: 1px solid #e5e7eb;
+}
+
+.ticketInfo p {
+  margin: 0.5rem 0;
+  color: #374151;
+  font-size: 0.95rem;
+}
+
+.ticketInfo p:first-child {
+  margin-top: 0;
+}
+
+.ticketInfo p:last-child {
+  margin-bottom: 0;
+}
+
+.replyForm {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.replyForm label {
+  font-weight: 500;
+  color: #374151;
+  font-size: 0.9rem;
+}
+
+.replyTextarea {
+  width: 100%;
+  padding: 0.75rem;
+  border: 2px solid #e5e7eb;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  font-family: inherit;
+  resize: vertical;
+  min-height: 150px;
+  max-height: 400px;
+  box-sizing: border-box;
+  transition: border-color 0.3s;
+}
+
+.replyTextarea:focus {
+  outline: none;
+  border-color: #667eea;
+}
+
+.replyModal .modalFooter {
+  display: flex;
+  justify-content: flex-end;
+  gap: 1rem;
+  padding: 1.5rem;
+  border-top: 2px solid #e5e7eb;
+  flex-shrink: 0;
+}
+
+.btnSecondary {
+  padding: 0.75rem 1.5rem;
+  background: white;
+  color: #374151;
+  border: 2px solid #e5e7eb;
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 500;
+  transition: all 0.3s;
+}
+
+.btnSecondary:hover:not(:disabled) {
+  background: #f9fafb;
+  border-color: #d1d5db;
+}
+
+.btnSecondary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Analytics Charts */
+.chartsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 1.5rem;
+  margin-top: 1rem;
+}
+
+.chartCard {
+  background: white;
+  border: 2px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 1.5rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.chartCard h3 {
+  margin: 0 0 1rem 0;
+  color: #1f2937;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.chartContainer {
+  min-height: 200px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Bar Chart */
+.barChart {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-around;
+  height: 200px;
+  width: 100%;
+  gap: 0.5rem;
+  padding: 1rem 0;
+}
+
+.barChartItem {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex: 1;
+  gap: 0.5rem;
+}
+
+.barChartBar {
+  width: 100%;
+  height: 150px;
+  background: #f3f4f6;
+  border-radius: 4px 4px 0 0;
+  display: flex;
+  align-items: flex-end;
+  position: relative;
+}
+
+.barChartFill {
+  width: 100%;
+  background: linear-gradient(to top, #667eea, #764ba2);
+  border-radius: 4px 4px 0 0;
+  min-height: 4px;
+  transition: height 0.3s ease;
+  cursor: pointer;
+}
+
+.barChartFill:hover {
+  opacity: 0.8;
+}
+
+.barChartLabel {
+  font-size: 0.75rem;
+  color: #6b7280;
+  text-align: center;
+  font-weight: 500;
+}
+
+.barChartValue {
+  font-size: 0.7rem;
+  color: #9ca3af;
+  text-align: center;
+}
+
+/* Pie Chart (Horizontal Bar) */
+.pieChart {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  width: 100%;
+}
+
+.pieChartItem {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.pieChartBar {
+  width: 100%;
+  height: 30px;
+  background: #f3f4f6;
+  border-radius: 6px;
+  overflow: hidden;
+  position: relative;
+}
+
+.pieChartFill {
+  height: 100%;
+  border-radius: 6px;
+  transition: width 0.3s ease;
+  min-width: 4px;
+}
+
+.pieChartLabel {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  color: #374151;
+}
+
+.pieChartDot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.pieChartValue {
+  margin-left: auto;
+  font-weight: 600;
+  color: #6b7280;
+}
+
+/* Line Chart */
+.lineChart {
+  width: 100%;
+  height: 200px;
+  position: relative;
+}
+
+.lineChartSvg {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.lineChartLabels {
+  display: flex;
+  justify-content: space-around;
+  margin-top: 0.5rem;
+  font-size: 0.75rem;
+  color: #6b7280;
+}
+
+.lineChartLabel {
+  text-align: center;
+  line-height: 1.4;
+}
+
+/* MacBook Air and form scrolling fixes */
+.settingsTab,
+.supportTab,
+.transactionsTab,
+.dashboard {
+  max-height: calc(100vh - 200px);
+  overflow-y: auto;
+  overflow-x: hidden;
+  box-sizing: border-box;
+}
+
+.tierCard,
+.ticketCard,
+.transactionCard {
+  max-width: 100%;
+  box-sizing: border-box;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+
+.tierForm {
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.tierFormRow {
+  grid-template-columns: repeat(auto-fit, minmax(min(200px, 100%), 1fr));
+}
+
+.tierInput,
+.settingsInput,
+.creditInput {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.userDetailView {
+  max-height: calc(100vh - 250px);
+  overflow-y: auto;
+  overflow-x: hidden;
+  box-sizing: border-box;
+}
+
+.creditManagement {
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
 /* Responsive */
+@media (max-width: 1440px) {
+  /* MacBook Air and similar screens */
+  .settingsTab,
+  .supportTab,
+  .transactionsTab,
+  .dashboardTab {
+    max-height: calc(100vh - 180px);
+  }
+
+  .tierFormRow {
+    grid-template-columns: 1fr;
+  }
+
+  .replyModal {
+    max-width: 90%;
+    max-height: calc(100vh - 1rem);
+  }
+}
+
 @media (max-width: 768px) {
   .headerContent {
     flex-direction: column;
@@ -1243,6 +1631,37 @@
   .usersTable th,
   .usersTable td {
     padding: 0.75rem 0.5rem;
+  }
+
+  .replyModal {
+    max-width: 95%;
+    margin: 0.5rem;
+  }
+
+  .replyModal .modalHeader,
+  .replyModal .modalBody,
+  .replyModal .modalFooter {
+    padding: 1rem;
+  }
+
+  .tierFormRow {
+    grid-template-columns: 1fr;
+  }
+
+  .chartsGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .chartCard {
+    padding: 1rem;
+  }
+
+  .barChart {
+    height: 150px;
+  }
+
+  .barChartBar {
+    height: 100px;
   }
 }
 
