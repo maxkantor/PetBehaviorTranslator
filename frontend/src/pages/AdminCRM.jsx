@@ -5,7 +5,8 @@ import {
   FaChartBar, FaCog, FaSignOutAlt, FaHeadset, FaReply, FaCopy, FaSearch,
   FaFilter, FaSort, FaUser, FaEnvelope, FaCalendar, FaDollarSign, FaCreditCard,
   FaCheckCircle, FaTimesCircle, FaEdit, FaTrash, FaEye, FaChevronRight,
-  FaChevronLeft, FaArrowUp, FaArrowDown, FaTicketAlt, FaShoppingCart
+  FaChevronLeft, FaArrowUp, FaArrowDown, FaTicketAlt, FaShoppingCart,
+  FaPlus, FaSave, FaGift
 } from 'react-icons/fa'
 import { getUserId } from '../services/premiumService'
 import { 
@@ -45,6 +46,11 @@ function AdminCRM() {
   const [grantAmount, setGrantAmount] = useState('')
   const [setAmount, setSetAmount] = useState('')
   const [refreshing, setRefreshing] = useState(false)
+  
+  // Settings state
+  const [pricingTiers, setPricingTiers] = useState([])
+  const [freeSearchLimit, setFreeSearchLimit] = useState(5)
+  const [savingConfig, setSavingConfig] = useState(false)
 
   useEffect(() => {
     initializeAdmin()
@@ -90,6 +96,13 @@ function AdminCRM() {
       // Preserve existing dashboard data if new data fails
       if (data) {
         setDashboardData(data)
+        // Load pricing tiers and free search limit for settings
+        if (data.summary) {
+          setFreeSearchLimit(data.summary.freeSearchLimit || 5)
+          if (data.summary.tiers && data.summary.tiers.length > 0) {
+            setPricingTiers(data.summary.tiers)
+          }
+        }
       }
     } catch (error) {
       console.error('Error loading dashboard:', error)
@@ -940,8 +953,242 @@ function AdminCRM() {
         {/* Settings Tab */}
         {activeTab === 'settings' && (
           <div className={styles.settingsTab}>
-            <h2>Settings</h2>
-            <p>Configuration options will be available here.</p>
+            <div className={styles.settingsHeader}>
+              <h2>Settings & Configuration</h2>
+              <button
+                onClick={async () => {
+                  setRefreshing(true)
+                  await loadDashboard()
+                  setRefreshing(false)
+                }}
+                className={styles.btnRefresh}
+                disabled={refreshing}
+              >
+                <FaSync className={refreshing ? styles.spinning : ''} /> 
+                {refreshing ? 'Refreshing...' : 'Refresh'}
+              </button>
+            </div>
+
+            {/* Free Search Limit */}
+            <div className={styles.settingsSection}>
+              <h3>
+                <FaGift /> Free Search Limit
+              </h3>
+              <p className={styles.settingsDescription}>
+                Number of free searches every user gets before needing to purchase credits
+              </p>
+              <div className={styles.settingsInputGroup}>
+                <label>Free Searches per User:</label>
+                <input
+                  type="number"
+                  min="0"
+                  max="100"
+                  value={freeSearchLimit}
+                  onChange={(e) => setFreeSearchLimit(parseInt(e.target.value) || 5)}
+                  className={styles.settingsInput}
+                />
+              </div>
+            </div>
+
+            {/* Pricing Tiers */}
+            <div className={styles.settingsSection}>
+              <div className={styles.settingsSectionHeader}>
+                <h3>
+                  <FaDollarSign /> Credit Pricing Tiers
+                </h3>
+                <button
+                  onClick={() => {
+                    const newTier = {
+                      id: pricingTiers.length > 0 ? Math.max(...pricingTiers.map(t => t.id || 0)) + 1 : 1,
+                      name: '',
+                      description: '',
+                      price: 0,
+                      credits: 0,
+                      popular: false
+                    }
+                    setPricingTiers([...pricingTiers, newTier])
+                  }}
+                  className={styles.btnAdd}
+                >
+                  <FaPlus /> Add Tier
+                </button>
+              </div>
+              <p className={styles.settingsDescription}>
+                Configure the credit packs available for purchase. Users will see these on the Credits page.
+              </p>
+
+              {pricingTiers.length === 0 ? (
+                <p className={styles.emptyState}>No pricing tiers configured. Add one to get started.</p>
+              ) : (
+                <div className={styles.tiersList}>
+                  {pricingTiers.map((tier, index) => (
+                    <div key={index} className={styles.tierCard}>
+                      <div className={styles.tierHeader}>
+                        <h4>Tier #{tier.id || index + 1}</h4>
+                        {tier.popular && (
+                          <span className={styles.popularBadge}>⭐ Popular</span>
+                        )}
+                        <button
+                          onClick={() => {
+                            const newTiers = pricingTiers.filter((_, i) => i !== index)
+                            setPricingTiers(newTiers)
+                          }}
+                          className={styles.btnDelete}
+                          title="Remove Tier"
+                        >
+                          <FaTrash />
+                        </button>
+                      </div>
+                      
+                      <div className={styles.tierForm}>
+                        <div className={styles.tierFormRow}>
+                          <div className={styles.tierFormField}>
+                            <label>Pack Name *</label>
+                            <input
+                              type="text"
+                              placeholder="e.g., Starter Pack"
+                              value={tier.name || ''}
+                              onChange={(e) => {
+                                const newTiers = [...pricingTiers]
+                                newTiers[index] = { ...newTiers[index], name: e.target.value }
+                                setPricingTiers(newTiers)
+                              }}
+                              className={styles.tierInput}
+                            />
+                          </div>
+                          
+                          <div className={styles.tierFormField}>
+                            <label>Description *</label>
+                            <input
+                              type="text"
+                              placeholder="e.g., Perfect for occasional use"
+                              value={tier.description || ''}
+                              onChange={(e) => {
+                                const newTiers = [...pricingTiers]
+                                newTiers[index] = { ...newTiers[index], description: e.target.value }
+                                setPricingTiers(newTiers)
+                              }}
+                              className={styles.tierInput}
+                            />
+                          </div>
+                        </div>
+
+                        <div className={styles.tierFormRow}>
+                          <div className={styles.tierFormField}>
+                            <label>Price ($) *</label>
+                            <input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              placeholder="0.00"
+                              value={tier.price || ''}
+                              onChange={(e) => {
+                                const newTiers = [...pricingTiers]
+                                newTiers[index] = { ...newTiers[index], price: parseFloat(e.target.value) || 0 }
+                                setPricingTiers(newTiers)
+                              }}
+                              className={styles.tierInput}
+                            />
+                          </div>
+                          
+                          <div className={styles.tierFormField}>
+                            <label>Credits *</label>
+                            <input
+                              type="number"
+                              min="1"
+                              placeholder="0"
+                              value={tier.credits || ''}
+                              onChange={(e) => {
+                                const newTiers = [...pricingTiers]
+                                newTiers[index] = { ...newTiers[index], credits: parseInt(e.target.value) || 0 }
+                                setPricingTiers(newTiers)
+                              }}
+                              className={styles.tierInput}
+                            />
+                          </div>
+                          
+                          <div className={styles.tierFormField}>
+                            <label className={styles.checkboxLabel}>
+                              <input
+                                type="checkbox"
+                                checked={tier.popular || false}
+                                onChange={(e) => {
+                                  const newTiers = [...pricingTiers]
+                                  newTiers[index] = { ...newTiers[index], popular: e.target.checked }
+                                  setPricingTiers(newTiers)
+                                }}
+                              />
+                              Mark as Popular
+                            </label>
+                          </div>
+                        </div>
+
+                        {tier.price > 0 && tier.credits > 0 && (
+                          <div className={styles.tierPriceInfo}>
+                            <FaCoins /> ${(tier.price / tier.credits).toFixed(3)} per credit
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Save Button */}
+            <div className={styles.settingsActions}>
+              <button
+                onClick={async () => {
+                  // Validate tiers before saving
+                  const validTiers = pricingTiers.filter(t => 
+                    t.name && t.description && t.price > 0 && t.credits > 0
+                  )
+                  const incompleteTiers = pricingTiers.filter(t => 
+                    !t.name || !t.description || t.price <= 0 || t.credits <= 0
+                  )
+                  
+                  if (incompleteTiers.length > 0 && validTiers.length > 0) {
+                    if (!window.confirm(`${incompleteTiers.length} incomplete tier(s) will be removed. Continue?`)) {
+                      return
+                    }
+                  } else if (incompleteTiers.length > 0 && validTiers.length === 0) {
+                    showMessage('Please fill in all fields for at least one tier (name, description, price > 0, credits > 0)', 'error')
+                    return
+                  }
+                  
+                  setSavingConfig(true)
+                  try {
+                    await updateAdminConfig({
+                      freeSearchLimit: freeSearchLimit,
+                      tiers: validTiers.length > 0 ? validTiers : null
+                    })
+                    showMessage('Configuration saved successfully!', 'success')
+                    // Remove incomplete tiers from state
+                    if (incompleteTiers.length > 0) {
+                      setPricingTiers(validTiers)
+                    }
+                    // Reload dashboard to get updated config
+                    await loadDashboard()
+                  } catch (error) {
+                    showMessage('Failed to save configuration: ' + (error.response?.data?.message || error.message), 'error')
+                  } finally {
+                    setSavingConfig(false)
+                  }
+                }}
+                className={styles.btnSave}
+                disabled={savingConfig}
+              >
+                {savingConfig ? (
+                  <>
+                    <FaSync className={styles.spinning} /> Saving...
+                  </>
+                ) : (
+                  <>
+                    <FaSave /> Save Configuration
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         )}
       </main>

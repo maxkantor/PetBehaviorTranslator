@@ -880,9 +880,255 @@
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
 }
 
-.settingsTab h2 {
-  margin: 0 0 1rem 0;
+.settingsHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2rem;
+  padding-bottom: 1rem;
+  border-bottom: 2px solid #e5e7eb;
+}
+
+.settingsHeader h2 {
+  margin: 0;
   color: #1f2937;
+}
+
+.settingsSection {
+  margin-bottom: 2.5rem;
+  padding: 1.5rem;
+  background: #f9fafb;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+}
+
+.settingsSection h3 {
+  margin: 0 0 0.5rem 0;
+  color: #1f2937;
+  font-size: 1.25rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.settingsSectionHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.settingsDescription {
+  margin: 0 0 1rem 0;
+  color: #6b7280;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.settingsInputGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.settingsInputGroup label {
+  font-weight: 500;
+  color: #374151;
+  font-size: 0.9rem;
+}
+
+.settingsInput {
+  padding: 0.75rem;
+  border: 2px solid #e5e7eb;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  max-width: 200px;
+  transition: border-color 0.3s;
+}
+
+.settingsInput:focus {
+  outline: none;
+  border-color: #667eea;
+}
+
+.settingsActions {
+  margin-top: 2rem;
+  padding-top: 1.5rem;
+  border-top: 2px solid #e5e7eb;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.btnSave {
+  padding: 0.85rem 2rem;
+  background: #667eea;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 600;
+  font-size: 1rem;
+  transition: background 0.3s;
+}
+
+.btnSave:hover:not(:disabled) {
+  background: #5568d3;
+}
+
+.btnSave:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btnAdd {
+  padding: 0.6rem 1.2rem;
+  background: #4ecdc4;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 500;
+  font-size: 0.9rem;
+  transition: background 0.3s;
+}
+
+.btnAdd:hover {
+  background: #44a08d;
+}
+
+.tiersList {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.tierCard {
+  background: white;
+  border: 2px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 1.5rem;
+  transition: border-color 0.3s;
+}
+
+.tierCard:hover {
+  border-color: #667eea;
+}
+
+.tierHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.tierHeader h4 {
+  margin: 0;
+  color: #1f2937;
+  font-size: 1.1rem;
+}
+
+.popularBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.75rem;
+  background: rgba(255, 230, 109, 0.2);
+  color: #b8860b;
+  border-radius: 12px;
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.btnDelete {
+  padding: 0.4rem 0.6rem;
+  background: #dc3545;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.3s;
+}
+
+.btnDelete:hover {
+  background: #c2185b;
+}
+
+.tierForm {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.tierFormRow {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+}
+
+.tierFormField {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.tierFormField label {
+  font-weight: 500;
+  color: #374151;
+  font-size: 0.9rem;
+}
+
+.tierInput {
+  padding: 0.75rem;
+  border: 2px solid #e5e7eb;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  transition: border-color 0.3s;
+}
+
+.tierInput:focus {
+  outline: none;
+  border-color: #667eea;
+}
+
+.checkboxLabel {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  font-weight: 500;
+  color: #374151;
+  font-size: 0.9rem;
+}
+
+.checkboxLabel input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+}
+
+.tierPriceInfo {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  background: rgba(78, 205, 196, 0.1);
+  border-radius: 6px;
+  color: #0d9488;
+  font-weight: 500;
+  font-size: 0.9rem;
+  margin-top: 0.5rem;
 }
 
 /* Access Denied / Loading */
