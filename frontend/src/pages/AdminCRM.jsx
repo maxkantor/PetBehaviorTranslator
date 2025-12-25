@@ -44,6 +44,7 @@ function AdminCRM() {
   const [settingCredits, setSettingCredits] = useState(null)
   const [grantAmount, setGrantAmount] = useState('')
   const [setAmount, setSetAmount] = useState('')
+  const [refreshing, setRefreshing] = useState(false)
 
   useEffect(() => {
     initializeAdmin()
@@ -62,9 +63,10 @@ function AdminCRM() {
           console.warn('Admin connect failed:', connectError)
         }
       }
+      // Load all data in parallel, but don't show loading for individual refreshes
       await Promise.all([
         loadDashboard(),
-        loadUsers(),
+        loadUsers(true), // Show loading only on initial load
         loadSupportTickets(),
         loadStripeActivities()
       ])
@@ -85,40 +87,79 @@ function AdminCRM() {
   const loadDashboard = async () => {
     try {
       const data = await getAdminDashboard()
-      setDashboardData(data)
+      // Preserve existing dashboard data if new data fails
+      if (data) {
+        setDashboardData(data)
+      }
     } catch (error) {
       console.error('Error loading dashboard:', error)
+      // Don't clear existing data on error
+      if (!dashboardData) {
+        showMessage('Failed to load dashboard data', 'error')
+      }
     }
   }
 
-  const loadUsers = async () => {
-    setLoading(true)
+  const loadUsers = async (showLoading = false) => {
+    if (showLoading) {
+      setLoading(true)
+    } else {
+      setRefreshing(true)
+    }
     try {
       const data = await getAllUsers()
-      setUsers(data.users || [])
+      // Preserve existing user credits data when refreshing
+      const newUsers = data.users || []
+      
+      // Only update if we got new data
+      if (newUsers.length > 0 || data.users !== undefined) {
+        setUsers(newUsers)
+      }
+      
+      // Preserve existing credit data
+      const preservedCredits = { ...userCredits }
+      newUsers.forEach(user => {
+        // Keep existing credit data if we have it
+        if (preservedCredits[user.userId]) {
+          // Keep it
+        }
+      })
     } catch (error) {
       console.error('Error loading users:', error)
       showMessage('Failed to load users', 'error')
+      // Don't clear existing data on error
     } finally {
-      setLoading(false)
+      if (showLoading) {
+        setLoading(false)
+      } else {
+        setRefreshing(false)
+      }
     }
   }
 
   const loadSupportTickets = async () => {
     try {
       const data = await getAllSupportTickets()
-      setSupportTickets(data.tickets || [])
+      // Preserve existing tickets if new data fails
+      if (data && data.tickets) {
+        setSupportTickets(data.tickets)
+      }
     } catch (error) {
       console.error('Error loading support tickets:', error)
+      // Don't clear existing data on error
     }
   }
 
   const loadStripeActivities = async () => {
     try {
       const data = await getStripeActivities()
-      setStripeActivities(data.activities || [])
+      // Preserve existing activities if new data fails
+      if (data && data.activities) {
+        setStripeActivities(data.activities)
+      }
     } catch (error) {
       console.error('Error loading Stripe activities:', error)
+      // Don't clear existing data on error
     }
   }
 
@@ -200,7 +241,8 @@ function AdminCRM() {
     try {
       const result = await grantCredits(userId, amount, null)
       showMessage(`Granted ${amount} credits to user`, 'success')
-      await loadUsers()
+      // Refresh users without showing loading spinner
+      await loadUsers(false)
       if (result.creditsRemaining !== undefined) {
         setUserCredits(prev => ({
           ...prev,
@@ -219,7 +261,8 @@ function AdminCRM() {
     try {
       const result = await setUserCredits(userId, amount, null)
       showMessage(`Set user credits to ${amount}`, 'success')
-      await loadUsers()
+      // Refresh users without showing loading spinner
+      await loadUsers(false)
       if (result.creditsRemaining !== undefined) {
         setUserCredits(prev => ({
           ...prev,
@@ -252,7 +295,8 @@ function AdminCRM() {
         await setPremiumStatus(userId)
         showMessage('Premium status granted', 'success')
       }
-      await loadUsers()
+      // Refresh users without showing loading spinner
+      await loadUsers(false)
     } catch (error) {
       showMessage('Failed to update premium status', 'error')
     }
@@ -402,19 +446,24 @@ function AdminCRM() {
 
             {dashboardData?.summary && (
               <div className={styles.dashboardSection}>
-                <h2>Today's Activity</h2>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                  <h2>Today's Activity</h2>
+                  <span style={{ fontSize: '0.85rem', color: '#6b7280' }}>
+                    {new Date().toLocaleDateString()}
+                  </span>
+                </div>
                 <div className={styles.activityGrid}>
                   <div className={styles.activityCard}>
                     <FaHistory />
                     <div>
-                      <h4>Translations</h4>
+                      <h4>Translations (Today)</h4>
                       <p>{dashboardData.summary.todaysTranslations || 0}</p>
                     </div>
                   </div>
                   <div className={styles.activityCard}>
                     <FaShoppingCart />
                     <div>
-                      <h4>Purchases</h4>
+                      <h4>Purchases (Today)</h4>
                       <p>{dashboardData.summary.todaysPurchases || 0}</p>
                     </div>
                   </div>
@@ -426,33 +475,45 @@ function AdminCRM() {
                     </div>
                   </div>
                 </div>
+                <p style={{ marginTop: '1rem', fontSize: '0.85rem', color: '#6b7280', fontStyle: 'italic' }}>
+                  Note: Historical data is preserved. Check the Users, Support, and Transactions tabs for complete historical records.
+                </p>
               </div>
             )}
 
             <div className={styles.dashboardSection}>
-              <h2>Recent Users</h2>
-              <div className={styles.recentUsers}>
-                {users.slice(0, 5).map(user => (
-                  <div key={user.userId} className={styles.recentUserCard}>
-                    <div className={styles.recentUserInfo}>
-                      <FaUser />
-                      <div>
-                        <strong>{user.email || user.userId}</strong>
-                        <span>{user.isPremium ? '⭐ Premium' : 'Free'}</span>
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => {
-                        setSelectedUser(user)
-                        setActiveTab('users')
-                      }}
-                      className={styles.btnView}
-                    >
-                      <FaEye /> View
-                    </button>
-                  </div>
-                ))}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                <h2>Recent Users</h2>
+                <span style={{ fontSize: '0.85rem', color: '#6b7280' }}>
+                  Showing {Math.min(5, users.length)} of {users.length} total users
+                </span>
               </div>
+              {users.length === 0 ? (
+                <p style={{ color: '#6b7280', fontStyle: 'italic' }}>No users found. Users will appear here after they use the app.</p>
+              ) : (
+                <div className={styles.recentUsers}>
+                  {users.slice(0, 5).map(user => (
+                    <div key={user.userId} className={styles.recentUserCard}>
+                      <div className={styles.recentUserInfo}>
+                        <FaUser />
+                        <div>
+                          <strong>{user.email || user.userId}</strong>
+                          <span>{user.isPremium ? '⭐ Premium' : 'Free'} • Activity: {user.dailyCount || 0}</span>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => {
+                          setSelectedUser(user)
+                          setActiveTab('users')
+                        }}
+                        className={styles.btnView}
+                      >
+                        <FaEye /> View
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -504,8 +565,18 @@ function AdminCRM() {
                       <FaSort /> {sortOrder === 'asc' ? <FaArrowUp /> : <FaArrowDown />}
                     </button>
                     
-                    <button onClick={loadUsers} className={styles.btnRefresh}>
-                      <FaSync /> Refresh
+                    <button 
+                      onClick={() => {
+                        loadUsers(false)
+                        loadDashboard()
+                        loadSupportTickets()
+                        loadStripeActivities()
+                      }} 
+                      className={styles.btnRefresh}
+                      disabled={refreshing}
+                    >
+                      <FaSync className={refreshing ? styles.spinning : ''} /> 
+                      {refreshing ? 'Refreshing...' : 'Refresh'}
                     </button>
                   </div>
                 </div>
@@ -737,13 +808,26 @@ function AdminCRM() {
           <div className={styles.supportTab}>
             <div className={styles.supportHeader}>
               <h2>Support Tickets</h2>
-              <button onClick={loadSupportTickets} className={styles.btnRefresh}>
-                <FaSync /> Refresh
+              <button 
+                onClick={() => {
+                  setRefreshing(true)
+                  loadSupportTickets().finally(() => setRefreshing(false))
+                }} 
+                className={styles.btnRefresh}
+                disabled={refreshing}
+              >
+                <FaSync className={refreshing ? styles.spinning : ''} /> 
+                {refreshing ? 'Refreshing...' : 'Refresh'}
               </button>
             </div>
             
             <div className={styles.ticketsList}>
-              {supportTickets.map(ticket => (
+              {supportTickets.length === 0 ? (
+                <p style={{ color: '#6b7280', fontStyle: 'italic', textAlign: 'center', padding: '2rem' }}>
+                  No support tickets found. All historical tickets will appear here.
+                </p>
+              ) : (
+                supportTickets.map(ticket => (
                 <div key={ticket.ticketId} className={styles.ticketCard}>
                   <div className={styles.ticketHeader}>
                     <div>
@@ -792,13 +876,26 @@ function AdminCRM() {
           <div className={styles.transactionsTab}>
             <div className={styles.transactionsHeader}>
               <h2>Payment Transactions</h2>
-              <button onClick={loadStripeActivities} className={styles.btnRefresh}>
-                <FaSync /> Refresh
+              <button 
+                onClick={() => {
+                  setRefreshing(true)
+                  loadStripeActivities().finally(() => setRefreshing(false))
+                }} 
+                className={styles.btnRefresh}
+                disabled={refreshing}
+              >
+                <FaSync className={refreshing ? styles.spinning : ''} /> 
+                {refreshing ? 'Refreshing...' : 'Refresh'}
               </button>
             </div>
             
             <div className={styles.transactionsList}>
-              {stripeActivities.map((activity, idx) => (
+              {stripeActivities.length === 0 ? (
+                <p style={{ color: '#6b7280', fontStyle: 'italic', textAlign: 'center', padding: '2rem' }}>
+                  No transactions found. All historical transactions will appear here.
+                </p>
+              ) : (
+                stripeActivities.map((activity, idx) => (
                 <div key={idx} className={styles.transactionCard}>
                   <div className={styles.transactionHeader}>
                     <div>
@@ -833,7 +930,8 @@ function AdminCRM() {
                     </div>
                   </div>
                 </div>
-              ))}
+                ))
+              )}
             </div>
           </div>
         )}
