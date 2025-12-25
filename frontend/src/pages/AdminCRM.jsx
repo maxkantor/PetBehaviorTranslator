@@ -51,6 +51,7 @@ function AdminCRM() {
   const [pricingTiers, setPricingTiers] = useState([])
   const [freeSearchLimit, setFreeSearchLimit] = useState(5)
   const [savingConfig, setSavingConfig] = useState(false)
+  const [authChecked, setAuthChecked] = useState(false) // Track if we've checked auth
 
   useEffect(() => {
     initializeAdmin()
@@ -59,7 +60,13 @@ function AdminCRM() {
   const initializeAdmin = async () => {
     const userId = getUserId()
     setCurrentUserId(userId)
-    setLoading(true)
+    
+    // Only show loading on first load, not on refresh
+    const isFirstLoad = !authChecked
+    if (isFirstLoad) {
+      setLoading(true)
+    }
+    
     try {
       const email = localStorage.getItem('userEmail')
       if (email) {
@@ -67,48 +74,90 @@ function AdminCRM() {
           await adminConnect()
         } catch (connectError) {
           console.warn('Admin connect failed:', connectError)
+          // Continue anyway - session token should be enough
         }
       }
-      // Load all data in parallel, but don't show loading for individual refreshes
-      await Promise.all([
+      
+      // Load all data in parallel
+      // Use Promise.allSettled to ensure all requests complete even if some fail
+      const results = await Promise.allSettled([
         loadDashboard(),
-        loadUsers(true), // Show loading only on initial load
+        loadUsers(isFirstLoad), // Show loading only on initial load
         loadSupportTickets(),
         loadStripeActivities()
       ])
-      setIsAdmin(true)
+      
+      // Check if any critical request failed
+      const hasCriticalError = results.some((result, index) => {
+        if (result.status === 'rejected') {
+          const error = result.reason
+          // Only treat 401 as critical
+          return error?.response?.status === 401
+        }
+        return false
+      })
+      
+      if (hasCriticalError) {
+        setIsAdmin(false)
+        setAuthChecked(true)
+        showMessage('Session expired. Please log in again.', 'error')
+        setTimeout(() => handleLogout(), 2000)
+      } else {
+        setIsAdmin(true)
+        setAuthChecked(true) // Mark auth as checked
+      }
     } catch (error) {
       console.error('Admin initialization error:', error)
+      setAuthChecked(true) // Mark auth as checked even on error
       if (error.response?.status === 401) {
+        setIsAdmin(false)
         showMessage('Session expired. Please log in again.', 'error')
-        handleLogout()
+        setTimeout(() => handleLogout(), 2000)
       } else {
-        showMessage(`Failed to load dashboard: ${error.response?.data?.message || error.message}`, 'error')
+        // For other errors, still allow access (might be temporary)
+        // Preserve existing admin status if we had it
+        if (isAdmin) {
+          // Keep admin access, just show warning
+          console.warn('Some data failed to load, but preserving existing data')
+        } else {
+          setIsAdmin(true) // Assume admin if we got here
+        }
+        if (isFirstLoad) {
+          showMessage(`Failed to load dashboard: ${error.response?.data?.message || error.message}`, 'error')
+        }
       }
     } finally {
-      setLoading(false)
+      if (isFirstLoad) {
+        setLoading(false)
+      }
     }
   }
 
   const loadDashboard = async () => {
     try {
       const data = await getAdminDashboard()
-      // Preserve existing dashboard data if new data fails
+      // Only update if we got valid data
       if (data) {
         setDashboardData(data)
         // Load pricing tiers and free search limit for settings
         if (data.summary) {
-          setFreeSearchLimit(data.summary.freeSearchLimit || 5)
-          if (data.summary.tiers && data.summary.tiers.length > 0) {
+          if (data.summary.freeSearchLimit !== undefined) {
+            setFreeSearchLimit(data.summary.freeSearchLimit)
+          }
+          if (data.summary.tiers) {
+            // Only update tiers if we got them (even if empty array)
             setPricingTiers(data.summary.tiers)
           }
         }
       }
+      // If data is null/undefined but no error, keep existing dashboard data
     } catch (error) {
       console.error('Error loading dashboard:', error)
-      // Don't clear existing data on error
+      // Don't clear existing data on error - preserve what we have
       if (!dashboardData) {
         showMessage('Failed to load dashboard data', 'error')
+      } else {
+        console.warn('Could not refresh dashboard, but preserving existing data')
       }
     }
   }
@@ -121,26 +170,35 @@ function AdminCRM() {
     }
     try {
       const data = await getAllUsers()
-      // Preserve existing user credits data when refreshing
-      const newUsers = data.users || []
-      
-      // Only update if we got new data
-      if (newUsers.length > 0 || data.users !== undefined) {
+      // Only update if we got valid data
+      if (data && data.users !== undefined) {
+        const newUsers = data.users || []
+        // Always update users if we got a response (even if empty array)
         setUsers(newUsers)
-      }
-      
-      // Preserve existing credit data
-      const preservedCredits = { ...userCredits }
-      newUsers.forEach(user => {
-        // Keep existing credit data if we have it
-        if (preservedCredits[user.userId]) {
-          // Keep it
+        
+        // Preserve existing credit data for users that still exist
+        const preservedCredits = { ...userCredits }
+        const updatedCredits = {}
+        newUsers.forEach(user => {
+          // Keep existing credit data if we have it
+          if (preservedCredits[user.userId]) {
+            updatedCredits[user.userId] = preservedCredits[user.userId]
+          }
+        })
+        if (Object.keys(updatedCredits).length > 0) {
+          setUserCredits(updatedCredits)
         }
-      })
+      }
+      // If data is null/undefined but no error, keep existing users
     } catch (error) {
       console.error('Error loading users:', error)
-      showMessage('Failed to load users', 'error')
-      // Don't clear existing data on error
+      // Don't clear existing data on error - preserve what we have
+      if (users.length === 0) {
+        // Only show error if we have no existing data
+        showMessage('Failed to load users', 'error')
+      } else {
+        console.warn('Could not refresh users, but preserving existing data')
+      }
     } finally {
       if (showLoading) {
         setLoading(false)
@@ -150,29 +208,45 @@ function AdminCRM() {
     }
   }
 
-  const loadSupportTickets = async () => {
+  const loadSupportTickets = async (preserveExisting = true) => {
     try {
       const data = await getAllSupportTickets()
-      // Preserve existing tickets if new data fails
-      if (data && data.tickets) {
+      // Only update if we got valid data
+      if (data && data.tickets !== undefined) {
         setSupportTickets(data.tickets)
+      } else if (!preserveExisting) {
+        // Only clear if explicitly requested and no data
+        setSupportTickets([])
       }
+      // If data is null/undefined but no error, keep existing tickets
     } catch (error) {
       console.error('Error loading support tickets:', error)
-      // Don't clear existing data on error
+      // Don't clear existing data on error - preserve what we have
+      if (!preserveExisting && supportTickets.length === 0) {
+        // Only show error if we have no existing data and not preserving
+        console.warn('Could not load support tickets')
+      }
     }
   }
 
-  const loadStripeActivities = async () => {
+  const loadStripeActivities = async (preserveExisting = true) => {
     try {
       const data = await getStripeActivities()
-      // Preserve existing activities if new data fails
-      if (data && data.activities) {
+      // Only update if we got valid data
+      if (data && data.activities !== undefined) {
         setStripeActivities(data.activities)
+      } else if (!preserveExisting) {
+        // Only clear if explicitly requested and no data
+        setStripeActivities([])
       }
+      // If data is null/undefined but no error, keep existing activities
     } catch (error) {
       console.error('Error loading Stripe activities:', error)
-      // Don't clear existing data on error
+      // Don't clear existing data on error - preserve what we have
+      if (!preserveExisting && stripeActivities.length === 0) {
+        // Only show error if we have no existing data and not preserving
+        console.warn('Could not load Stripe activities')
+      }
     }
   }
 
@@ -315,7 +389,20 @@ function AdminCRM() {
     }
   }
 
-  if (!isAdmin && !loading) {
+  // Show loading while checking authentication
+  if (!authChecked || (loading && !isAdmin)) {
+    return (
+      <div className={styles.container}>
+        <div className={styles.loading}>
+          <FaSync className={styles.spinner} />
+          <p>Checking Admin Access...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Only show access denied after we've checked auth and confirmed no access
+  if (!isAdmin && authChecked) {
     return (
       <div className={styles.container}>
         <div className={styles.accessDenied}>
@@ -323,17 +410,6 @@ function AdminCRM() {
           <h1>Access Denied</h1>
           <p>Admin access required</p>
           <Link to="/" className={styles.btnBack}>Back to App</Link>
-        </div>
-      </div>
-    )
-  }
-
-  if (loading && !isAdmin) {
-    return (
-      <div className={styles.container}>
-        <div className={styles.loading}>
-          <FaSync className={styles.spinner} />
-          <p>Loading...</p>
         </div>
       </div>
     )
@@ -579,11 +655,19 @@ function AdminCRM() {
                     </button>
                     
                     <button 
-                      onClick={() => {
-                        loadUsers(false)
-                        loadDashboard()
-                        loadSupportTickets()
-                        loadStripeActivities()
+                      onClick={async () => {
+                        setRefreshing(true)
+                        try {
+                          // Refresh all data in parallel, preserving existing data
+                          await Promise.allSettled([
+                            loadUsers(false),
+                            loadDashboard(),
+                            loadSupportTickets(true), // preserve existing
+                            loadStripeActivities(true) // preserve existing
+                          ])
+                        } finally {
+                          setRefreshing(false)
+                        }
                       }} 
                       className={styles.btnRefresh}
                       disabled={refreshing}
@@ -822,9 +906,13 @@ function AdminCRM() {
             <div className={styles.supportHeader}>
               <h2>Support Tickets</h2>
               <button 
-                onClick={() => {
+                onClick={async () => {
                   setRefreshing(true)
-                  loadSupportTickets().finally(() => setRefreshing(false))
+                  try {
+                    await loadSupportTickets(true) // preserve existing
+                  } finally {
+                    setRefreshing(false)
+                  }
                 }} 
                 className={styles.btnRefresh}
                 disabled={refreshing}
@@ -891,9 +979,13 @@ function AdminCRM() {
             <div className={styles.transactionsHeader}>
               <h2>Payment Transactions</h2>
               <button 
-                onClick={() => {
+                onClick={async () => {
                   setRefreshing(true)
-                  loadStripeActivities().finally(() => setRefreshing(false))
+                  try {
+                    await loadStripeActivities(true) // preserve existing
+                  } finally {
+                    setRefreshing(false)
+                  }
                 }} 
                 className={styles.btnRefresh}
                 disabled={refreshing}
