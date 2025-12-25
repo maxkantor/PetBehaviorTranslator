@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Setup - Pet Behavior Translator</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+        }
+        .container {
+            text-align: center;
+            background: rgba(255, 255, 255, 0.15);
+            padding: 60px 40px;
+            border-radius: 30px;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            max-width: 600px;
+            animation: fadeIn 0.5s ease-in;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        h1 {
+            font-size: 3em;
+            margin-bottom: 20px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+        }
+        .subtitle {
+            font-size: 1.3em;
+            margin-bottom: 40px;
+            opacity: 0.9;
+        }
+        button {
+            background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
+            color: white;
+            border: none;
+            padding: 18px 40px;
+            font-size: 1.2em;
+            border-radius: 50px;
+            cursor: pointer;
+            margin: 10px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        }
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+        }
+        button:active {
+            transform: translateY(0);
+        }
+        .btn-secondary {
+            background: linear-gradient(135deg, #2196F3 0%, #1976D2 100%);
+        }
+        .success {
+            background: rgba(76, 175, 80, 0.3);
+            padding: 25px;
+            border-radius: 15px;
+            margin-top: 30px;
+            display: none;
+            animation: slideIn 0.5s ease-out;
+        }
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateX(-20px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+        .success h2 {
+            font-size: 1.8em;
+            margin-bottom: 15px;
+        }
+        .features {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 20px;
+            border-radius: 15px;
+            margin-top: 30px;
+            text-align: left;
+        }
+        .features h3 {
+            margin-bottom: 15px;
+            font-size: 1.5em;
+        }
+        .features ul {
+            list-style: none;
+            padding-left: 0;
+        }
+        .features li {
+            padding: 8px 0;
+            font-size: 1.1em;
+        }
+        .features li:before {
+            content: "✅ ";
+            margin-right: 10px;
+        }
+        .info-box {
+            background: rgba(255, 255, 255, 0.2);
+            padding: 20px;
+            border-radius: 15px;
+            margin-top: 20px;
+        }
+        .user-id {
+            font-family: monospace;
+            background: rgba(0, 0, 0, 0.3);
+            padding: 10px 15px;
+            border-radius: 8px;
+            display: inline-block;
+            margin-top: 10px;
+            font-size: 1.1em;
+        }
+        .countdown {
+            font-size: 2em;
+            margin-top: 15px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔐 Admin Access</h1>
+        <p class="subtitle">Grant yourself unlimited access with no restrictions</p>
+        
+        <button onclick="setAdmin()" id="adminBtn">🚀 Activate Admin Mode</button>
+        <button class="btn-secondary" onclick="goToApp()">Open App →</button>
+        
+        <div id="success" class="success">
+            <h2>🎉 Admin Access Activated!</h2>
+            <p>Redirecting to app<span id="countdown" class="countdown"></span></p>
+        </div>
+        
+        <div class="features">
+            <h3>🌟 Admin Features Unlocked:</h3>
+            <ul>
+                <li>Unlimited translations (no daily limit)</li>
+                <li>Advanced AI analysis with expert insights</li>
+                <li>Prevention tips & recommendations</li>
+                <li>Priority support (24-hour response)</li>
+                <li>All premium features enabled</li>
+                <li>Valid until 2035 (10 years!)</li>
+            </ul>
+        </div>
+        
+        <div class="info-box">
+            <strong>Current User ID:</strong><br>
+            <div class="user-id" id="userId">Not set</div>
+        </div>
+    </div>
+
+    <script>
+        // Fixed admin user ID (must match ADMIN_USER_ID in AWS Secrets Manager)
+        const ADMIN_USER_ID = 'admin_user';
+        
+        function setAdmin() {
+            // Set the admin user ID in localStorage
+            localStorage.setItem('petBehaviorUserId', ADMIN_USER_ID);
+            
+            // Show success message
+            const successDiv = document.getElementById('success');
+            successDiv.style.display = 'block';
+            document.getElementById('userId').textContent = ADMIN_USER_ID + ' (ADMIN)';
+            
+            // Countdown and redirect
+            let seconds = 3;
+            const countdownSpan = document.getElementById('countdown');
+            countdownSpan.textContent = ` in ${seconds}...`;
+            
+            const interval = setInterval(() => {
+                seconds--;
+                if (seconds > 0) {
+                    countdownSpan.textContent = ` in ${seconds}...`;
+                } else {
+                    clearInterval(interval);
+                    // Redirect to same domain (works on any hostname)
+                    const hostname = window.location.hostname;
+                    const protocol = window.location.protocol;
+                    const port = window.location.port ? `:${window.location.port}` : '';
+                    window.location.href = `${protocol}//${hostname}${port}/`;
+                }
+            }, 1000);
+        }
+        
+        function goToApp() {
+            const hostname = window.location.hostname;
+            const protocol = window.location.protocol;
+            const port = window.location.port ? `:${window.location.port}` : '';
+            window.location.href = `${protocol}//${hostname}${port}/`;
+        }
+        
+        // Display current user ID on load
+        window.onload = function() {
+            const currentUserId = localStorage.getItem('petBehaviorUserId');
+            if (currentUserId) {
+                const display = currentUserId === ADMIN_USER_ID ? 
+                    currentUserId + ' (ADMIN ✅)' : currentUserId;
+                document.getElementById('userId').textContent = display;
+            } else {
+                document.getElementById('userId').textContent = 'Not set - Click button to activate';
+            }
+        };
+    </script>
+</body>
+</html>
+
+
+
+
+

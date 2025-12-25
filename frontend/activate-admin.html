@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Activate Admin - Pet Behavior Translator</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+            color: white;
+        }
+        .container {
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(10px);
+            border-radius: 30px;
+            padding: 50px 40px;
+            max-width: 600px;
+            width: 100%;
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+            border: 1px solid rgba(255, 255, 255, 0.18);
+        }
+        h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+        .subtitle {
+            text-align: center;
+            opacity: 0.9;
+            margin-bottom: 40px;
+            font-size: 1.1em;
+        }
+        .info-box {
+            background: rgba(255, 255, 255, 0.2);
+            padding: 20px;
+            border-radius: 15px;
+            margin: 20px 0;
+            font-family: monospace;
+            word-break: break-all;
+            text-align: center;
+        }
+        .info-box.highlight {
+            background: rgba(76, 175, 80, 0.3);
+            font-size: 1.1em;
+            font-weight: bold;
+        }
+        button {
+            background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
+            color: white;
+            border: none;
+            padding: 18px 40px;
+            font-size: 1.2em;
+            border-radius: 50px;
+            cursor: pointer;
+            margin: 10px 5px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            width: 100%;
+        }
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+        }
+        button.secondary {
+            background: linear-gradient(135deg, #2196F3 0%, #1976D2 100%);
+        }
+        .status {
+            padding: 20px;
+            border-radius: 15px;
+            margin: 20px 0;
+            display: none;
+            text-align: center;
+        }
+        .status.success {
+            background: rgba(76, 175, 80, 0.3);
+            display: block;
+        }
+        .status.info {
+            background: rgba(33, 150, 243, 0.3);
+            display: block;
+        }
+        .features {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 20px;
+            border-radius: 15px;
+            margin-top: 30px;
+            text-align: left;
+        }
+        .features h3 {
+            margin-bottom: 15px;
+            font-size: 1.3em;
+        }
+        .features ul {
+            list-style: none;
+            padding-left: 0;
+        }
+        .features li {
+            padding: 8px 0;
+            font-size: 1em;
+        }
+        .features li:before {
+            content: "✅ ";
+            margin-right: 10px;
+        }
+        .instructions {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 20px;
+            border-radius: 15px;
+            margin-top: 20px;
+            font-size: 0.95em;
+            line-height: 1.6;
+        }
+        .instructions code {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔐 Activate Admin</h1>
+        <p class="subtitle">Use your single admin account on any device</p>
+
+        <div class="info-box highlight" id="adminUserId">admin_user</div>
+        <p style="text-align: center; margin-top: 10px; opacity: 0.8; font-size: 0.9em;">
+            This is your universal admin user ID
+        </p>
+
+        <button onclick="activateAdmin()" id="activateBtn">
+            🚀 Activate Admin on This Device
+        </button>
+        <button class="secondary" onclick="goToApp()">
+            Open App →
+        </button>
+
+        <div id="status" class="status"></div>
+
+        <div class="features">
+            <h3>🌟 What This Does:</h3>
+            <ul>
+                <li>Sets your user ID to the admin account</li>
+                <li>Works on any device/computer</li>
+                <li>Grants unlimited translations</li>
+                <li>Enables all premium features</li>
+                <li>Access admin dashboard</li>
+            </ul>
+        </div>
+
+        <div class="instructions">
+            <strong>💡 Pro Tip:</strong> Bookmark this page! Visit it on any new device to instantly activate admin access.
+            <br><br>
+            <strong>Current Device User ID:</strong><br>
+            <code id="currentUserId">Loading...</code>
+        </div>
+    </div>
+
+    <script>
+        // Get the admin user ID (default: admin_user, can be customized)
+        const ADMIN_USER_ID = 'admin_user'; // Change this if you use a different admin ID in Secrets Manager
+        
+        // Display current user ID
+        window.onload = function() {
+            const currentUserId = localStorage.getItem('petBehaviorUserId');
+            document.getElementById('currentUserId').textContent = currentUserId || 'Not set (will be created)';
+            
+            // Show if already admin
+            if (currentUserId === ADMIN_USER_ID) {
+                showStatus('✅ You are already using the admin account!', 'success');
+                document.getElementById('activateBtn').textContent = '✅ Already Admin';
+                document.getElementById('activateBtn').disabled = true;
+            }
+        };
+
+        function activateAdmin() {
+            // Set the admin user ID
+            localStorage.setItem('petBehaviorUserId', ADMIN_USER_ID);
+            
+            // Show success
+            showStatus('✅ Admin activated! Redirecting...', 'success');
+            document.getElementById('currentUserId').textContent = ADMIN_USER_ID;
+            
+            // Redirect to main app
+            setTimeout(() => {
+                // Get current hostname to redirect to the same domain
+                const hostname = window.location.hostname;
+                const protocol = window.location.protocol;
+                const port = window.location.port ? `:${window.location.port}` : '';
+                window.location.href = `${protocol}//${hostname}${port}/`;
+            }, 1500);
+        }
+
+        function goToApp() {
+            const hostname = window.location.hostname;
+            const protocol = window.location.protocol;
+            const port = window.location.port ? `:${window.location.port}` : '';
+            window.location.href = `${protocol}//${hostname}${port}/`;
+        }
+
+        function showStatus(message, type) {
+            const statusEl = document.getElementById('status');
+            statusEl.textContent = message;
+            statusEl.className = `status ${type}`;
+        }
+    </script>
+</body>
+</html>
+
+

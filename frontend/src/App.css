@@ -3,5 +3,13 @@
   overflow: hidden;
 }
 
+/* Mobile optimizations */
+@media (max-width: 768px) {
+  .app {
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
 
 

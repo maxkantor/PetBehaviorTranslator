@@ -917,123 +917,394 @@
   outline-offset: 2px;
 }
 
+/* Mobile and Tablet Styles */
 @media (max-width: 768px) {
+  .container {
+    padding: 0.5rem 0.75rem;
+    min-height: 100vh;
+    height: auto;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .header {
+    margin-bottom: 0.5rem;
+  }
+
   .title {
-    font-size: 2rem;
+    font-size: 1.5rem;
+    margin-bottom: 0.25rem;
+    gap: 0.4rem;
   }
 
   .titleIcon {
-    font-size: 2.5rem;
+    font-size: 1.75rem;
   }
 
   .subtitle {
-    font-size: 1.1rem;
+    font-size: 0.9rem;
+    margin-bottom: 0.4rem;
+    padding: 0 0.5rem;
+  }
+
+  .content {
+    padding: 0 0.75rem;
+    flex: 1;
+    min-height: 0;
   }
 
   .inputSection {
-    padding: 1.5rem;
+    padding: 1rem;
+    margin-bottom: 0.5rem;
+    border-radius: 12px;
+  }
+
+  .textarea {
+    font-size: 16px; /* Prevents zoom on iOS */
+    padding: 0.75rem;
+    min-height: 80px;
+    max-height: 100px;
+    border-radius: 10px;
+  }
+
+  .presets {
+    margin: 0.4rem 0;
+  }
+
+  .presetsLabel {
+    font-size: 0.85rem;
+    margin-bottom: 0.4rem;
   }
 
   .presetButtons {
-    flex-direction: column;
+    gap: 0.3rem;
   }
 
   .presetButton {
-    width: 100%;
-  }
-
-  .footerContent {
-    gap: 1.5rem;
-  }
-
-  .copyright {
+    padding: 0.6rem 0.8rem;
     font-size: 0.8rem;
-    text-align: center;
+    min-height: 44px; /* iOS touch target */
+    border-radius: 8px;
   }
 
-  .madeWith {
-    font-size: 0.75rem;
+  .translateButton {
+    padding: 1rem;
+    font-size: 1rem;
+    min-height: 48px; /* Better touch target */
+    border-radius: 12px;
+    margin-top: 0.75rem;
+  }
+
+  .usageDisplay {
+    gap: 0.4rem;
+    margin-top: 0.4rem;
+  }
+
+  .usageBadge,
+  .premiumBadge {
+    padding: 0.4rem 0.8rem;
+    font-size: 0.8rem;
+    border-radius: 16px;
   }
 
   .creditExplanation {
-    font-size: 0.75rem;
+    font-size: 0.7rem;
   }
 
   .socialProof {
-    margin: 0.75rem 0;
-    padding: 0.5rem;
+    margin: 0.5rem 0;
+    padding: 0.4rem;
+    border-radius: 8px;
   }
 
   .socialProofText {
-    font-size: 0.85rem;
+    font-size: 0.75rem;
+    margin-bottom: 0.1rem;
   }
 
   .socialProofPets {
-    font-size: 0.8rem;
+    font-size: 0.7rem;
   }
 
   .howItWorks {
-    margin-top: 1rem;
-    padding: 0.75rem;
+    margin-top: 0.5rem;
+    padding: 0.6rem;
+    border-radius: 8px;
   }
 
   .howItWorksTitle {
-    font-size: 0.9rem;
+    font-size: 0.8rem;
+    margin-bottom: 0.25rem;
   }
 
   .howItWorksText {
+    font-size: 0.75rem;
+    line-height: 1.4;
+  }
+
+  .formActionButtons {
+    margin-top: 1rem;
+    margin-bottom: 1rem;
+    gap: 0.75rem;
+    flex-direction: column;
+  }
+
+  .premiumLink,
+  .supportLinkSecondary {
+    padding: 0.75rem 1.25rem;
+    font-size: 0.85rem;
+    min-height: 44px;
+    width: 100%;
+    justify-content: center;
+  }
+
+  .footer {
+    margin-top: 0.5rem;
+    padding-top: 0.5rem;
+  }
+
+  .footerContent {
+    gap: 1rem;
+    padding: 0 0.5rem;
+  }
+
+  .footerLinks {
+    flex-direction: column;
+    gap: 0.75rem;
+    width: 100%;
+  }
+
+  .supportLink {
+    padding: 0.85rem 1.5rem;
+    font-size: 1rem;
+    min-height: 48px;
+    width: 100%;
+    justify-content: center;
+  }
+
+  .copyright {
+    font-size: 0.7rem;
+    text-align: center;
+    padding: 0 0.5rem;
+  }
+
+  .madeWith {
+    font-size: 0.7rem;
+  }
+
+  .petImage {
+    width: 80px;
+    height: 80px;
+    opacity: 0.4;
+    border-width: 3px;
+  }
+
+  .petImage.puppy1 {
+    top: 3%;
+    left: 1%;
+  }
+
+  .petImage.puppy2 {
+    bottom: 8%;
+    right: 1%;
+  }
+
+  .petImage.kitten1 {
+    top: 10%;
+    right: 1%;
+  }
+
+  .petImage.kitten2 {
+    bottom: 12%;
+    left: 3%;
+  }
+
+  .petImage.puppy3,
+  .petImage.kitten3 {
+    display: none; /* Hide extra images on mobile */
+  }
+
+  /* Results */
+  .results {
+    gap: 1rem;
+  }
+
+  .resultCard {
+    padding: 1rem;
+    border-radius: 12px;
+  }
+
+  .resultTitle {
+    font-size: 1.1rem;
+    margin-bottom: 0.5rem;
+    gap: 0.5rem;
+  }
+
+  .resultIcon {
+    font-size: 1.2rem;
+  }
+
+  .resultText {
+    font-size: 0.9rem;
+    line-height: 1.5;
+  }
+
+  .stepsList li {
+    padding-left: 2rem;
+    margin-left: 0.5rem;
+    font-size: 0.9rem;
+    padding-top: 0.5rem;
+    padding-bottom: 0.5rem;
+  }
+
+  .stepNumber {
+    left: -0.75rem;
+    width: 1.5rem;
+    height: 1.5rem;
+    font-size: 0.7rem;
+    top: 0.5rem;
+  }
+
+  .productLink {
+    padding: 0.4rem 0.6rem;
     font-size: 0.85rem;
   }
 
-  .supportLinkSecondary {
-    padding: 0.6rem 1.2rem;
+  /* Modals */
+  .modalOverlay {
+    padding: 0.5rem;
+  }
+
+  .modalContent {
+    max-height: calc(100vh - 1rem);
+    max-width: 100%;
+  }
+
+  .modalContent > .modal,
+  .modalContent > .content,
+  .resultsModalContent {
+    padding: 1rem;
+    border-radius: 16px;
+    max-height: calc(100vh - 1rem);
+  }
+
+  .resultsModalTitle {
+    font-size: 1.5rem;
+    margin-bottom: 1rem;
+    padding-bottom: 0.75rem;
+  }
+
+  .modalClose {
+    width: 2rem;
+    height: 2rem;
+    top: 0.75rem;
+    right: 0.75rem;
+    font-size: 1rem;
+  }
+
+  .errorCard {
+    padding: 0.75rem;
+    font-size: 0.85rem;
+    border-radius: 10px;
+  }
+}
+
+/* Small Mobile (iPhone SE, etc.) */
+@media (max-width: 375px) {
+  .container {
+    padding: 0.4rem 0.5rem;
+  }
+
+  .title {
+    font-size: 1.25rem;
+  }
+
+  .titleIcon {
+    font-size: 1.5rem;
+  }
+
+  .subtitle {
+    font-size: 0.8rem;
+  }
+
+  .content {
+    padding: 0 0.5rem;
+  }
+
+  .inputSection {
+    padding: 0.75rem;
+  }
+
+  .textarea {
+    font-size: 16px;
+    padding: 0.65rem;
+    min-height: 70px;
+  }
+
+  .presetButton {
+    padding: 0.5rem 0.7rem;
+    font-size: 0.75rem;
+  }
+
+  .translateButton {
+    padding: 0.85rem;
+    font-size: 0.95rem;
+  }
+
+  .usageBadge,
+  .premiumBadge {
+    padding: 0.35rem 0.7rem;
+    font-size: 0.75rem;
+  }
+
+  .petImage {
+    width: 60px;
+    height: 60px;
+    opacity: 0.3;
+  }
+
+  .resultCard {
+    padding: 0.85rem;
+  }
+
+  .resultTitle {
+    font-size: 1rem;
+  }
+
+  .resultText {
+    font-size: 0.85rem;
+  }
+}
+
+/* Landscape Mobile */
+@media (max-width: 768px) and (orientation: landscape) {
+  .container {
+    padding: 0.4rem 0.75rem;
+  }
+
+  .header {
+    margin-bottom: 0.4rem;
+  }
+
+  .title {
+    font-size: 1.3rem;
+  }
+
+  .subtitle {
     font-size: 0.85rem;
   }
 
   .petImage {
-    width: 120px;
-    height: 120px;
-    opacity: 0.6;
+    display: none; /* Hide pet images in landscape */
   }
 
-  .petImage.puppy1 {
-    top: 5%;
-    left: 2%;
+  .inputSection {
+    padding: 0.75rem;
   }
 
-  .petImage.puppy2 {
-    bottom: 10%;
-    right: 2%;
-  }
-
-  .petImage.kitten1 {
-    top: 15%;
-    right: 2%;
-  }
-
-  .petImage.kitten2 {
-    bottom: 15%;
-    left: 5%;
-  }
-
-  .stepsList li {
-    padding-left: 2.5rem;
-    margin-left: 0.5rem;
-  }
-
-  .stepNumber {
-    left: -1rem;
-    width: 1.5rem;
-    height: 1.5rem;
-    font-size: 0.75rem;
-  }
-
-  .modalOverlay {
-    padding: 1rem;
-  }
-
-  .modalContent {
-    max-height: calc(100vh - 2rem);
+  .textarea {
+    min-height: 60px;
+    max-height: 80px;
   }
 }
 

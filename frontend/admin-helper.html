@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Helper - Pet Behavior Translator</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 40px 20px;
+            color: white;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .card {
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 40px;
+            margin-bottom: 30px;
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+        }
+        h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+        .subtitle {
+            text-align: center;
+            opacity: 0.9;
+            margin-bottom: 40px;
+        }
+        .info-box {
+            background: rgba(255, 255, 255, 0.2);
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px 0;
+            font-family: monospace;
+            word-break: break-all;
+        }
+        .info-box.highlight {
+            background: rgba(76, 175, 80, 0.3);
+            font-size: 1.1em;
+            font-weight: bold;
+        }
+        button {
+            background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            font-size: 1.1em;
+            border-radius: 10px;
+            cursor: pointer;
+            margin: 10px 5px;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        }
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+        }
+        button.secondary {
+            background: linear-gradient(135deg, #2196F3 0%, #1976D2 100%);
+        }
+        button.danger {
+            background: linear-gradient(135deg, #f44336 0%, #d32f2f 100%);
+        }
+        .status {
+            padding: 15px;
+            border-radius: 10px;
+            margin: 20px 0;
+            display: none;
+        }
+        .status.success {
+            background: rgba(76, 175, 80, 0.3);
+            display: block;
+        }
+        .status.error {
+            background: rgba(244, 67, 54, 0.3);
+            display: block;
+        }
+        .status.info {
+            background: rgba(33, 150, 243, 0.3);
+            display: block;
+        }
+        input {
+            width: 100%;
+            padding: 12px;
+            font-size: 1em;
+            border: none;
+            border-radius: 8px;
+            margin: 10px 0;
+            background: rgba(255, 255, 255, 0.9);
+            color: #333;
+        }
+        label {
+            display: block;
+            margin-top: 15px;
+            font-weight: 600;
+        }
+        .step {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 20px;
+            border-radius: 10px;
+            margin: 15px 0;
+        }
+        .step-number {
+            background: #4CAF50;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            margin-right: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="card">
+            <h1>🔐 Admin Helper</h1>
+            <p class="subtitle">Grant yourself unlimited admin access</p>
+
+            <div class="step">
+                <h3><span class="step-number">1</span>Your User ID</h3>
+                <div class="info-box highlight" id="userId">Loading...</div>
+                <button onclick="copyUserId()">📋 Copy User ID</button>
+            </div>
+
+            <div class="step">
+                <h3><span class="step-number">2</span>Backend API URL</h3>
+                <label>Enter your backend URL:</label>
+                <input type="text" id="backendUrl" placeholder="https://your-api.execute-api.region.amazonaws.com/Prod">
+                <button onclick="detectBackendUrl()">🔍 Auto-Detect</button>
+                <button class="secondary" onclick="saveBackendUrl()">💾 Save URL</button>
+            </div>
+
+            <div class="step">
+                <h3><span class="step-number">3</span>Grant Admin Access</h3>
+                <button onclick="grantAdmin()" style="font-size: 1.2em; padding: 20px 40px;">
+                    🚀 Grant Me Admin Access
+                </button>
+            </div>
+
+            <div id="status" class="status"></div>
+
+            <div class="step">
+                <h3><span class="step-number">4</span>Verify Status</h3>
+                <button class="secondary" onclick="checkStatus()">🔍 Check My Status</button>
+                <button class="secondary" onclick="refreshPage()">🔄 Refresh Page</button>
+            </div>
+        </div>
+
+        <div class="card">
+            <h3>📊 Current Status</h3>
+            <div id="currentStatus" class="info-box">
+                Click "Check My Status" to view your current access level
+            </div>
+        </div>
+
+        <div class="card">
+            <h3>🛠️ Admin Tools</h3>
+            <button class="secondary" onclick="viewAllUsers()">👥 View All Users</button>
+            <button class="danger" onclick="removeAdmin()">🔓 Remove My Admin</button>
+        </div>
+    </div>
+
+    <script>
+        // Get user ID
+        const userId = localStorage.getItem('petBehaviorUserId');
+        document.getElementById('userId').textContent = userId || 'No user ID found (visit main site first)';
+
+        // Load saved backend URL
+        const savedBackend = localStorage.getItem('adminBackendUrl');
+        if (savedBackend) {
+            document.getElementById('backendUrl').value = savedBackend;
+        }
+
+        function copyUserId() {
+            if (userId) {
+                navigator.clipboard.writeText(userId);
+                showStatus('✅ User ID copied to clipboard!', 'success');
+            } else {
+                showStatus('❌ No user ID found. Visit the main site first.', 'error');
+            }
+        }
+
+        function detectBackendUrl() {
+            // Try to get from environment or config
+            const envUrl = import.meta?.env?.VITE_API_URL;
+            if (envUrl && envUrl !== 'http://localhost:5001') {
+                document.getElementById('backendUrl').value = envUrl;
+                showStatus('✅ Backend URL detected!', 'success');
+                saveBackendUrl();
+            } else {
+                showStatus('⚠️ Could not auto-detect. Please enter manually.', 'info');
+            }
+        }
+
+        function saveBackendUrl() {
+            const url = document.getElementById('backendUrl').value.trim();
+            if (url) {
+                localStorage.setItem('adminBackendUrl', url);
+                showStatus('✅ Backend URL saved!', 'success');
+            }
+        }
+
+        async function grantAdmin() {
+            const backendUrl = document.getElementById('backendUrl').value.trim();
+            
+            if (!userId) {
+                showStatus('❌ No user ID found. Visit the main site first to generate a user ID.', 'error');
+                return;
+            }
+
+            if (!backendUrl) {
+                showStatus('❌ Please enter your backend URL first.', 'error');
+                return;
+            }
+
+            showStatus('⏳ Granting admin access...', 'info');
+
+            try {
+                const response = await fetch(`${backendUrl}/api/admin/set-premium/${encodeURIComponent(userId)}`, {
+                    method: 'POST'
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    showStatus(`✅ SUCCESS! You now have admin access!\n\n` +
+                               `Status: ${data.isPremium ? 'PREMIUM ✅' : 'FREE'}\n` +
+                               `Expires: ${new Date(data.expiresAt).toLocaleDateString()}\n\n` +
+                               `Refresh the page to activate!`, 'success');
+                    
+                    // Auto-check status after 2 seconds
+                    setTimeout(checkStatus, 2000);
+                } else {
+                    showStatus('❌ Failed to grant admin access. Check the response in console.', 'error');
+                    console.error('Response:', data);
+                }
+            } catch (error) {
+                showStatus(`❌ Error: ${error.message}\n\nCheck:\n1. Backend URL is correct\n2. Backend is deployed\n3. CORS is configured`, 'error');
+                console.error('Error:', error);
+            }
+        }
+
+        async function checkStatus() {
+            const backendUrl = document.getElementById('backendUrl').value.trim();
+            
+            if (!userId || !backendUrl) {
+                showStatus('❌ Missing user ID or backend URL', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${backendUrl}/api/usage/${encodeURIComponent(userId)}`);
+                const data = await response.json();
+
+                const statusHtml = `
+                    <strong>Your Status:</strong><br><br>
+                    User ID: ${userId}<br>
+                    Premium: ${data.isPremium ? '✅ YES' : '❌ NO'}<br>
+                    Daily Limit: ${data.dailyLimit === 2147483647 ? 'UNLIMITED ✨' : data.dailyLimit}<br>
+                    Used Today: ${data.dailyCount}<br>
+                    Remaining: ${data.remaining === 2147483647 ? 'UNLIMITED ✨' : data.remaining}
+                `;
+
+                document.getElementById('currentStatus').innerHTML = statusHtml;
+                
+                if (data.isPremium && data.dailyLimit === 2147483647) {
+                    showStatus('✅ You have UNLIMITED admin access!', 'success');
+                } else if (data.isPremium) {
+                    showStatus('✅ You have premium access but limited translations', 'info');
+                } else {
+                    showStatus('⚠️ You are on the free plan. Click "Grant Me Admin Access" above.', 'info');
+                }
+            } catch (error) {
+                showStatus(`❌ Error checking status: ${error.message}`, 'error');
+            }
+        }
+
+        async function viewAllUsers() {
+            const backendUrl = document.getElementById('backendUrl').value.trim();
+            
+            if (!backendUrl) {
+                showStatus('❌ Please enter backend URL first', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${backendUrl}/api/admin/users`);
+                const data = await response.json();
+                
+                console.log('All Users:', data);
+                showStatus(`✅ Found ${data.totalCount} users. Check browser console for details.`, 'success');
+            } catch (error) {
+                showStatus(`❌ Error: ${error.message}`, 'error');
+            }
+        }
+
+        async function removeAdmin() {
+            if (!confirm('Are you sure you want to remove your admin access?')) {
+                return;
+            }
+
+            const backendUrl = document.getElementById('backendUrl').value.trim();
+            
+            if (!userId || !backendUrl) {
+                showStatus('❌ Missing user ID or backend URL', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${backendUrl}/api/admin/remove-premium/${encodeURIComponent(userId)}`, {
+                    method: 'POST'
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    showStatus('✅ Admin access removed. You are now a free user.', 'success');
+                    setTimeout(checkStatus, 1000);
+                } else {
+                    showStatus('❌ Failed to remove admin access', 'error');
+                }
+            } catch (error) {
+                showStatus(`❌ Error: ${error.message}`, 'error');
+            }
+        }
+
+        function refreshPage() {
+            location.reload();
+        }
+
+        function showStatus(message, type) {
+            const statusEl = document.getElementById('status');
+            statusEl.textContent = message;
+            statusEl.className = `status ${type}`;
+            
+            // Auto-hide info messages after 5 seconds
+            if (type === 'info') {
+                setTimeout(() => {
+                    statusEl.style.display = 'none';
+                }, 5000);
+            }
+        }
+
+        // Auto-detect on load
+        setTimeout(detectBackendUrl, 1000);
+    </script>
+</body>
+</html>
+
+
+
+

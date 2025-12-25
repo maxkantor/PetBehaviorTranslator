@@ -328,24 +328,135 @@
   color: #555;
 }
 
+/* Tablet and Mobile */
 @media (max-width: 900px) {
+  .container {
+    padding: 1rem;
+  }
+
+  .overlay {
+    padding: 1rem;
+  }
+
+  .modal {
+    max-height: calc(100vh - 2rem);
+    border-radius: 16px;
+  }
+
   .modalBody {
     grid-template-columns: 1fr;
+    gap: 0.75rem;
   }
 }
 
+/* Mobile */
 @media (max-width: 600px) {
+  .container {
+    padding: 0.5rem;
+  }
+
+  .overlay {
+    padding: 0.5rem;
+    align-items: flex-start;
+    padding-top: 1rem;
+  }
+
   .modal {
-    padding: 1.1rem;
+    padding: 1rem;
+    max-height: calc(100vh - 1rem);
+    border-radius: 12px;
   }
 
   .modalHeader {
     flex-direction: column;
     align-items: flex-start;
+    gap: 0.75rem;
+    padding-bottom: 0.75rem;
+  }
+
+  .headerText h1 {
+    font-size: 1.25rem;
+  }
+
+  .subtitle {
+    font-size: 0.85rem;
   }
 
   .backToApp {
     width: 100%;
     justify-content: center;
+    padding: 0.75rem 1.25rem;
+    font-size: 0.9rem;
+    min-height: 44px;
+  }
+
+  .formGroup {
+    margin-bottom: 1rem;
+  }
+
+  .formLabel {
+    font-size: 0.9rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .formInput,
+  .formTextarea {
+    font-size: 16px; /* Prevents zoom on iOS */
+    padding: 0.75rem;
+    border-radius: 8px;
+  }
+
+  .formTextarea {
+    min-height: 100px;
+  }
+
+  .submitButton {
+    width: 100%;
+    padding: 0.85rem;
+    font-size: 1rem;
+    min-height: 48px;
+  }
+
+  .faqColumn {
+    padding: 0.75rem;
+  }
+
+  .faqItem {
+    padding: 0.75rem;
+    margin-bottom: 0.75rem;
+  }
+
+  .faqQuestion {
+    font-size: 0.9rem;
+  }
+
+  .faqAnswer {
+    font-size: 0.85rem;
+    margin-top: 0.5rem;
+  }
+
+  .successIcon {
+    font-size: 3rem;
+  }
+
+  .ticketId {
+    font-size: 0.8rem;
+    padding: 0.6rem;
+  }
+}
+
+/* Small Mobile */
+@media (max-width: 375px) {
+  .modal {
+    padding: 0.75rem;
+  }
+
+  .headerText h1 {
+    font-size: 1.1rem;
+  }
+
+  .formInput,
+  .formTextarea {
+    padding: 0.65rem;
   }
 }

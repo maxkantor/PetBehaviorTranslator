@@ -1,31 +1,44 @@
-﻿# Sensitive credentials
-*.csv
-*API Key*.txt
-petbehaviortranslator_accessKeys.csv
-PetBehaviorTranlator OpenAI API Key.txt
-*.pem
-*.key
+﻿# Secrets - NEVER commit these!
+secrets.json
+*.secrets.json
+secrets.local.json
 
-# Markdown files
-*.md
-
-# Build artifacts
-**/dist/
-**/build/
-**/node_modules/
-**/bin/
-**/obj/
-**/publish/
-*.zip
+# Environment files
+.env
+.env.local
+.env.*.local
 
 # IDE
-.vs/
 .vscode/
-*.suo
-*.user
+.idea/
+*.swp
+*.swo
+*~
 
 # OS
 .DS_Store
-Thumbs.
+Thumbs.db
 
-# Secret files
+# Build outputs
+dist/
+build/
+*.dll
+*.pdb
+bin/
+obj/
+
+# Logs
+*.log
+logs/
+
+# Dependencies
+node_modules/
+packages/
+
+# AWS
+.aws/
+amplify/
+
+# Temporary files
+*.tmp
+*.temp
