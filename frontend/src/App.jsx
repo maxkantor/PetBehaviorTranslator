@@ -3,7 +3,7 @@ import { useEffect } from 'react'
 import Home from './pages/Home'
 import Premium from './pages/Premium'
 import Support from './pages/Support'
-import Admin from './pages/Admin'
+import AdminCRM from './pages/AdminCRM'
 import AdminLogin from './pages/AdminLogin'
 import PaymentSuccess from './pages/PaymentSuccess'
 import MockCheckout from './pages/MockCheckout'
@@ -32,7 +32,7 @@ function AppContent() {
       <Route path="/admin/login" element={<AdminLogin />} />
       <Route path="/admin" element={
         <ProtectedAdminRoute>
-          <Admin />
+          <AdminCRM />
         </ProtectedAdminRoute>
       } />
       <Route path="/payment/success" element={<PaymentSuccess />} />
