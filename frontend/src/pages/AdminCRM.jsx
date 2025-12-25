@@ -828,45 +828,46 @@ function AdminCRM() {
                 </p>
               ) : (
                 supportTickets.map(ticket => (
-                <div key={ticket.ticketId} className={styles.ticketCard}>
-                  <div className={styles.ticketHeader}>
-                    <div>
-                      <h3>{ticket.subject}</h3>
-                      <p>From: {ticket.email} {ticket.userId && `(${ticket.userId})`}</p>
+                  <div key={ticket.ticketId} className={styles.ticketCard}>
+                    <div className={styles.ticketHeader}>
+                      <div>
+                        <h3>{ticket.subject}</h3>
+                        <p>From: {ticket.email} {ticket.userId && `(${ticket.userId})`}</p>
+                      </div>
+                      <div className={styles.ticketBadges}>
+                        <span className={`${styles.badge} ${ticket.status === 'Open' ? styles.badgeWarning : styles.badgeSuccess}`}>
+                          {ticket.status}
+                        </span>
+                        <span className={`${styles.badge} ${ticket.priority === 'High' ? styles.badgeDanger : styles.badgeInfo}`}>
+                          {ticket.priority} Priority
+                        </span>
+                      </div>
                     </div>
-                    <div className={styles.ticketBadges}>
-                      <span className={`${styles.badge} ${ticket.status === 'Open' ? styles.badgeWarning : styles.badgeSuccess}`}>
-                        {ticket.status}
-                      </span>
-                      <span className={`${styles.badge} ${ticket.priority === 'High' ? styles.badgeDanger : styles.badgeInfo}`}>
-                        {ticket.priority} Priority
-                      </span>
+                    <div className={styles.ticketBody}>
+                      <p>{ticket.message}</p>
+                      <div className={styles.ticketMeta}>
+                        <span>Created: {new Date(ticket.createdAt).toLocaleString()}</span>
+                        <span>Ticket ID: {ticket.ticketId}</span>
+                      </div>
                     </div>
+                    {ticket.status === 'Open' && (
+                      <div className={styles.ticketActions}>
+                        <button 
+                          className={styles.btnPrimary}
+                          onClick={() => {
+                            const reply = prompt('Enter your reply:')
+                            if (reply && reply.trim()) {
+                              handleReplyToTicket(ticket.ticketId, reply)
+                            }
+                          }}
+                        >
+                          <FaReply /> Reply
+                        </button>
+                      </div>
+                    )}
                   </div>
-                  <div className={styles.ticketBody}>
-                    <p>{ticket.message}</p>
-                    <div className={styles.ticketMeta}>
-                      <span>Created: {new Date(ticket.createdAt).toLocaleString()}</span>
-                      <span>Ticket ID: {ticket.ticketId}</span>
-                    </div>
-                  </div>
-                  {ticket.status === 'Open' && (
-                    <div className={styles.ticketActions}>
-                      <button 
-                        className={styles.btnPrimary}
-                        onClick={() => {
-                          const reply = prompt('Enter your reply:')
-                          if (reply && reply.trim()) {
-                            handleReplyToTicket(ticket.ticketId, reply)
-                          }
-                        }}
-                      >
-                        <FaReply /> Reply
-                      </button>
-                    </div>
-                  )}
-                </div>
-              ))}
+                ))
+              )}
             </div>
           </div>
         )}
@@ -896,40 +897,40 @@ function AdminCRM() {
                 </p>
               ) : (
                 stripeActivities.map((activity, idx) => (
-                <div key={idx} className={styles.transactionCard}>
-                  <div className={styles.transactionHeader}>
-                    <div>
-                      <h3>
-                        {activity.eventType === 'PURCHASE' ? '💳 Purchase' : 
-                         activity.eventType === 'PREMIUM_PURCHASE' ? '⭐ Premium Purchase' : 
-                         '↩️ Refund'}
-                      </h3>
-                      <p>{activity.customerName || activity.email || activity.userId}</p>
-                    </div>
-                    <div>
-                      <span className={`${styles.badge} ${activity.status === 'SUCCESS' ? styles.badgeSuccess : styles.badgeDanger}`}>
-                        {activity.status}
-                      </span>
-                      {activity.amount !== null && (
-                        <p className={styles.transactionAmount}>
-                          {activity.currency || 'USD'} ${activity.amount.toFixed(2)}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                  <div className={styles.transactionBody}>
-                    <div className={styles.transactionInfo}>
+                  <div key={idx} className={styles.transactionCard}>
+                    <div className={styles.transactionHeader}>
                       <div>
-                        <strong>Date:</strong> {new Date(activity.timestamp).toLocaleString()}
+                        <h3>
+                          {activity.eventType === 'PURCHASE' ? '💳 Purchase' : 
+                           activity.eventType === 'PREMIUM_PURCHASE' ? '⭐ Premium Purchase' : 
+                           '↩️ Refund'}
+                        </h3>
+                        <p>{activity.customerName || activity.email || activity.userId}</p>
                       </div>
-                      {activity.last4Digits && (
+                      <div>
+                        <span className={`${styles.badge} ${activity.status === 'SUCCESS' ? styles.badgeSuccess : styles.badgeDanger}`}>
+                          {activity.status}
+                        </span>
+                        {activity.amount !== null && (
+                          <p className={styles.transactionAmount}>
+                            {activity.currency || 'USD'} ${activity.amount.toFixed(2)}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                    <div className={styles.transactionBody}>
+                      <div className={styles.transactionInfo}>
                         <div>
-                          <strong>Card:</strong> •••• {activity.last4Digits}
+                          <strong>Date:</strong> {new Date(activity.timestamp).toLocaleString()}
                         </div>
-                      )}
+                        {activity.last4Digits && (
+                          <div>
+                            <strong>Card:</strong> •••• {activity.last4Digits}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
-                </div>
                 ))
               )}
             </div>
