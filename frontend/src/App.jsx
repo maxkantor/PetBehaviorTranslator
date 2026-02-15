@@ -1,6 +1,7 @@
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { useEffect } from 'react'
 import Home from './pages/Home'
+import Platform from './pages/Platform'
 import Premium from './pages/Premium'
 import Support from './pages/Support'
 import AdminCRM from './pages/AdminCRM'
@@ -24,6 +25,7 @@ function AppContent() {
   return (
     <Routes>
       <Route path="/" element={<Home />} />
+      <Route path="/platform" element={<Platform />} />
       <Route path="/premium" element={<Premium />} />
       <Route path="/support" element={<Support />} />
       {/* Redirect /login to /admin/login */}

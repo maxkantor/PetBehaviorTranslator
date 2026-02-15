@@ -547,6 +547,9 @@ function Home() {
               <FaHeadset />
               Need Help?
             </button>
+            <Link to="/platform" className={styles.platformLink}>
+              Platform
+            </Link>
           </div>
 
           <div className={styles.copyright}>
