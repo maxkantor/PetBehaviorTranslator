@@ -13,9 +13,18 @@ import {
   getAllUsers, setPremiumStatus, removePremiumStatus, grantCredits, 
   getActivities, resetUserActivities, adminConnect, getAdminDashboard, 
   updateAdminConfig, adminLogout, setUserCredits, getAllSupportTickets, 
-  replyToSupportTicket, getStripeActivities 
+  replyToSupportTicket, getStripeActivities, restoreCreditsByEmail 
 } from '../services/adminService'
 import styles from './AdminCRM.module.css'
+
+function shortId(value) {
+  if (!value) return 'Not found'
+  return value.length > 22 ? `${value.slice(0, 12)}…${value.slice(-6)}` : value
+}
+
+function isCustomer(user, creditMap = {}) {
+  return Boolean(user?.email || user?.isPremium || (user?.credits || 0) > 0 || (creditMap[user?.userId]?.credits || 0) > 0)
+}
 
 function AdminCRM() {
   const navigate = useNavigate()
@@ -34,7 +43,7 @@ function AdminCRM() {
   const [activeTab, setActiveTab] = useState('dashboard')
   const [selectedUser, setSelectedUser] = useState(null)
   const [searchQuery, setSearchQuery] = useState('')
-  const [filterStatus, setFilterStatus] = useState('all') // all, premium, free
+  const [filterStatus, setFilterStatus] = useState('customers') // customers, all, premium, free
   const [sortBy, setSortBy] = useState('recent') // recent, name, credits, activity
   const [sortOrder, setSortOrder] = useState('desc') // asc, desc
   const [currentPage, setCurrentPage] = useState(1)
@@ -59,6 +68,10 @@ function AdminCRM() {
   const [replyingToTicket, setReplyingToTicket] = useState(null)
   const [replyMessage, setReplyMessage] = useState('')
   const [sendingReply, setSendingReply] = useState(false)
+  const [restoreEmail, setRestoreEmail] = useState('')
+  const [restoreTargetUserId, setRestoreTargetUserId] = useState('')
+  const [restoreExtraCredits, setRestoreExtraCredits] = useState('')
+  const [restoringCredits, setRestoringCredits] = useState(false)
 
   useEffect(() => {
     initializeAdmin()
@@ -186,18 +199,14 @@ function AdminCRM() {
         // Always update users if we got a response (even if empty array)
         setUsers(newUsers)
         
-        // Preserve existing credit data for users that still exist
         const preservedCredits = { ...userCredits }
         const updatedCredits = {}
         newUsers.forEach(user => {
-          // Keep existing credit data if we have it
-          if (preservedCredits[user.userId]) {
-            updatedCredits[user.userId] = preservedCredits[user.userId]
+          updatedCredits[user.userId] = {
+            credits: user.credits ?? preservedCredits[user.userId]?.credits ?? 0
           }
         })
-        if (Object.keys(updatedCredits).length > 0) {
-          setUserCredits(updatedCredits)
-        }
+        setUserCredits(updatedCredits)
       }
       // If data is null/undefined but no error, keep existing users
     } catch (error) {
@@ -288,7 +297,9 @@ function AdminCRM() {
     }
     
     // Status filter
-    if (filterStatus === 'premium') {
+    if (filterStatus === 'customers') {
+      filtered = filtered.filter(user => user.email || user.isPremium || (user.credits || 0) > 0)
+    } else if (filterStatus === 'premium') {
       filtered = filtered.filter(user => user.isPremium)
     } else if (filterStatus === 'free') {
       filtered = filtered.filter(user => !user.isPremium)
@@ -303,8 +314,8 @@ function AdminCRM() {
           bVal = (b.email || b.userId || '').toLowerCase()
           break
         case 'credits':
-          aVal = userCredits[a.userId]?.credits || 0
-          bVal = userCredits[b.userId]?.credits || 0
+          aVal = userCredits[a.userId]?.credits ?? a.credits ?? 0
+          bVal = userCredits[b.userId]?.credits ?? b.credits ?? 0
           break
         case 'activity':
           aVal = a.dailyCount || 0
@@ -312,8 +323,9 @@ function AdminCRM() {
           break
         case 'recent':
         default:
-          // Sort by most recent activity (would need timestamp field)
-          return 0
+          aVal = new Date(a.lastActivityAt || a.premiumExpiresAt || 0).getTime()
+          bVal = new Date(b.lastActivityAt || b.premiumExpiresAt || 0).getTime()
+          break
       }
       
       if (sortOrder === 'asc') {
@@ -326,6 +338,11 @@ function AdminCRM() {
     return filtered
   }, [users, searchQuery, filterStatus, sortBy, sortOrder, userCredits])
 
+  const customerUsers = useMemo(
+    () => users.filter(user => isCustomer(user, userCredits)),
+    [users, userCredits]
+  )
+
   // Pagination
   const totalPages = Math.ceil(filteredUsers.length / itemsPerPage)
   const paginatedUsers = useMemo(() => {
@@ -337,8 +354,7 @@ function AdminCRM() {
     setGrantingCredits(userId)
     try {
       const result = await grantCredits(userId, amount, null)
-      showMessage(`Granted ${amount} credits to user`, 'success')
-      // Refresh users without showing loading spinner
+      showMessage(`Granted ${amount} credits. ${userId === currentUserId ? 'Refresh the home page to see them.' : 'Ask the customer to refresh or restore by email.'}`, 'success')
       await loadUsers(false)
       if (result.creditsRemaining !== undefined) {
         setUserCredits(prev => ({
@@ -347,11 +363,57 @@ function AdminCRM() {
         }))
       }
     } catch (error) {
-      showMessage('Failed to grant credits', 'error')
+      showMessage(error.response?.data?.message || error.message || 'Failed to grant credits', 'error')
     } finally {
       setGrantingCredits(null)
     }
   }
+
+  const copyText = async (value) => {
+    if (!value) return
+    try {
+      await navigator.clipboard.writeText(value)
+      showMessage('Copied to clipboard', 'success')
+    } catch {
+      showMessage('Could not copy', 'error')
+    }
+  }
+
+  const handleRestoreByEmail = async () => {
+    if (!restoreEmail.includes('@')) {
+      showMessage('Enter the Stripe purchase email', 'error')
+      return
+    }
+    setRestoringCredits(true)
+    try {
+      const result = await restoreCreditsByEmail(
+        restoreEmail.trim(),
+        restoreTargetUserId.trim() || currentUserId,
+        parseInt(restoreExtraCredits, 10) || 0
+      )
+      showMessage(result.message || `Restored ${result.creditsRestored} credits`, 'success')
+      setRestoreEmail('')
+      setRestoreExtraCredits('')
+      await Promise.allSettled([loadUsers(false), loadStripeActivities(true)])
+    } catch (error) {
+      showMessage(error.response?.data?.message || error.message || 'Failed to restore credits', 'error')
+    } finally {
+      setRestoringCredits(false)
+    }
+  }
+
+  const recentCustomers = useMemo(() => {
+    const seen = new Set()
+    return stripeActivities
+      .filter(a => (a.eventType === 'PURCHASE' || a.eventType === 'PREMIUM_PURCHASE') && a.status === 'SUCCESS')
+      .filter(a => {
+        const key = (a.email || a.userId || '').toLowerCase()
+        if (!key || seen.has(key)) return false
+        seen.add(key)
+        return true
+      })
+      .slice(0, 8)
+  }, [stripeActivities])
 
   const handleSetCredits = async (userId, amount) => {
     setSettingCredits(userId)
@@ -367,7 +429,7 @@ function AdminCRM() {
         }))
       }
     } catch (error) {
-      showMessage('Failed to set credits', 'error')
+      showMessage(error.response?.data?.message || error.message || 'Failed to set credits', 'error')
     } finally {
       setSettingCredits(null)
     }
@@ -444,67 +506,65 @@ function AdminCRM() {
   }
 
   return (
-    <div className={styles.container}>
-      {/* Header */}
-      <header className={styles.header}>
-        <div className={styles.headerContent}>
-          <div className={styles.headerLeft}>
-            <FaUserShield className={styles.headerIcon} />
-            <div>
-              <h1 className={styles.headerTitle}>Admin CRM</h1>
-              <p className={styles.headerSubtitle}>Customer Relationship Management</p>
-            </div>
-          </div>
-          <div className={styles.headerRight}>
-            <button onClick={handleLogout} className={styles.btnLogout}>
-              <FaSignOutAlt /> Logout
-            </button>
+    <div className={styles.appShell}>
+      <aside className={styles.sidebar}>
+        <div className={styles.sidebarBrand}>
+          <FaUserShield />
+          <div>
+            <h1>Admin CRM</h1>
+            <p>Pet Behavior Translator</p>
           </div>
         </div>
-      </header>
+        <nav className={styles.sidebarNav}>
+          <button className={activeTab === 'dashboard' ? styles.active : ''} onClick={() => setActiveTab('dashboard')}>
+            <FaChartBar /> Dashboard
+          </button>
+          <button className={activeTab === 'users' ? styles.active : ''} onClick={() => setActiveTab('users')}>
+            <FaUsers /> Customers ({customerUsers.length})
+          </button>
+          <button className={activeTab === 'support' ? styles.active : ''} onClick={() => setActiveTab('support')}>
+            <FaHeadset /> Support ({supportTickets.filter(t => t.status === 'Open').length})
+          </button>
+          <button className={activeTab === 'transactions' ? styles.active : ''} onClick={() => setActiveTab('transactions')}>
+            <FaCreditCard /> Purchases ({stripeActivities.length})
+          </button>
+          <button className={activeTab === 'settings' ? styles.active : ''} onClick={() => setActiveTab('settings')}>
+            <FaCog /> Settings
+          </button>
+        </nav>
+        <div className={styles.sidebarContext}>
+          <div className={styles.sidebarContextTitle}>This browser</div>
+          <button type="button" className={styles.sidebarCopy} onClick={() => copyText(currentUserId)} title={currentUserId}>
+            <span>Logged user ID</span>
+            <strong>{shortId(currentUserId)}</strong>
+          </button>
+        </div>
+        <button onClick={handleLogout} className={styles.sidebarLogout}>
+          <FaSignOutAlt /> Logout
+        </button>
+      </aside>
 
-      {/* Message Alert */}
+      <div className={styles.content}>
+        <div className={styles.identityBanner}>
+          <div>
+            <span>Your logged user ID</span>
+            <strong title={currentUserId}>{currentUserId || 'Not found in this browser'}</strong>
+          </div>
+          <div>
+            <span>Use this ID when restoring credits</span>
+            <strong>Credits apply to the ID in this browser unless you paste another one</strong>
+          </div>
+          <button type="button" onClick={() => copyText(currentUserId)}>
+            <FaCopy /> Copy user ID
+          </button>
+        </div>
+
       {message && (
         <div className={`${styles.message} ${styles[messageType]}`}>
           {message}
         </div>
       )}
 
-      {/* Navigation Tabs */}
-      <nav className={styles.tabs}>
-        <button
-          className={`${styles.tab} ${activeTab === 'dashboard' ? styles.active : ''}`}
-          onClick={() => setActiveTab('dashboard')}
-        >
-          <FaChartBar /> Dashboard
-        </button>
-        <button
-          className={`${styles.tab} ${activeTab === 'users' ? styles.active : ''}`}
-          onClick={() => setActiveTab('users')}
-        >
-          <FaUsers /> Users ({users.length})
-        </button>
-        <button
-          className={`${styles.tab} ${activeTab === 'support' ? styles.active : ''}`}
-          onClick={() => setActiveTab('support')}
-        >
-          <FaHeadset /> Support ({supportTickets.filter(t => t.status === 'Open').length})
-        </button>
-        <button
-          className={`${styles.tab} ${activeTab === 'transactions' ? styles.active : ''}`}
-          onClick={() => setActiveTab('transactions')}
-        >
-          <FaCreditCard /> Transactions ({stripeActivities.length})
-        </button>
-        <button
-          className={`${styles.tab} ${activeTab === 'settings' ? styles.active : ''}`}
-          onClick={() => setActiveTab('settings')}
-        >
-          <FaCog /> Settings
-        </button>
-      </nav>
-
-      {/* Main Content */}
       <main className={styles.main}>
         {/* Dashboard Tab */}
         {activeTab === 'dashboard' && (
@@ -515,8 +575,9 @@ function AdminCRM() {
                   <FaUsers style={{ color: '#4ecdc4' }} />
                 </div>
                 <div className={styles.statContent}>
-                  <h3>Total Users</h3>
-                  <p className={styles.statValue}>{users.length}</p>
+                  <h3>Paying customers</h3>
+                  <p className={styles.statValue}>{customerUsers.length}</p>
+                  <small>{users.length} anonymous device IDs hidden</small>
                 </div>
               </div>
               
@@ -809,28 +870,69 @@ function AdminCRM() {
             </div>
 
             <div className={styles.dashboardSection}>
+              <h2>Restore credits by email</h2>
+              <p className={styles.sectionHint}>Use the Stripe receipt email. Credits are applied to the target user ID (defaults to your logged-in ID).</p>
+              <div className={styles.restoreGrid}>
+                <input
+                  type="email"
+                  placeholder="Purchase email"
+                  value={restoreEmail}
+                  onChange={(e) => setRestoreEmail(e.target.value)}
+                />
+                <input
+                  type="text"
+                  placeholder={`Target user ID (${currentUserId || 'your ID'})`}
+                  value={restoreTargetUserId}
+                  onChange={(e) => setRestoreTargetUserId(e.target.value)}
+                />
+                <input
+                  type="number"
+                  min="0"
+                  placeholder="Extra credits (optional)"
+                  value={restoreExtraCredits}
+                  onChange={(e) => setRestoreExtraCredits(e.target.value)}
+                />
+                <button className={styles.btnPrimary} onClick={handleRestoreByEmail} disabled={restoringCredits}>
+                  {restoringCredits ? <FaSync className={styles.spinning} /> : <FaGift />}
+                  {restoringCredits ? 'Restoring…' : 'Restore credits'}
+                </button>
+              </div>
+            </div>
+
+            <div className={styles.dashboardSection}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-                <h2>Recent Users</h2>
+                <h2>Recent paying customers</h2>
                 <span style={{ fontSize: '0.85rem', color: '#6b7280' }}>
-                  Showing {Math.min(5, users.length)} of {users.length} total users
+                  From Stripe purchases, not anonymous device IDs
                 </span>
               </div>
-              {users.length === 0 ? (
-                <p style={{ color: '#6b7280', fontStyle: 'italic' }}>No users found. Users will appear here after they use the app.</p>
+              {recentCustomers.length === 0 ? (
+                <p style={{ color: '#6b7280', fontStyle: 'italic' }}>No purchases yet. Customers appear here after a successful Stripe checkout.</p>
               ) : (
                 <div className={styles.recentUsers}>
-                  {users.slice(0, 5).map(user => (
-                    <div key={user.userId} className={styles.recentUserCard}>
+                  {recentCustomers.map(customer => (
+                    <div key={`${customer.email || customer.userId}-${customer.timestamp}`} className={styles.recentUserCard}>
                       <div className={styles.recentUserInfo}>
-                        <FaUser />
+                        <FaEnvelope />
                         <div>
-                          <strong>{user.email || user.userId}</strong>
-                          <span>{user.isPremium ? '⭐ Premium' : 'Free'} • Activity: {user.dailyCount || 0}</span>
+                          <strong>{customer.email || 'No email on file'}</strong>
+                          <span>
+                            {customer.customerName ? `${customer.customerName} • ` : ''}
+                            ${Number(customer.amount || 0).toFixed(2)} • {customer.details || customer.eventType}
+                          </span>
+                          <span className={styles.userIdHint}>{customer.userId}</span>
                         </div>
                       </div>
                       <button
                         onClick={() => {
-                          setSelectedUser(user)
+                          setRestoreEmail(customer.email || '')
+                          setRestoreTargetUserId(customer.userId || '')
+                          setSelectedUser({
+                            userId: customer.userId,
+                            email: customer.email,
+                            isPremium: customer.eventType === 'PREMIUM_PURCHASE',
+                            dailyCount: 0
+                          })
                           setActiveTab('users')
                         }}
                         className={styles.btnView}
@@ -869,7 +971,8 @@ function AdminCRM() {
                       onChange={(e) => setFilterStatus(e.target.value)}
                       className={styles.filterSelect}
                     >
-                      <option value="all">All Users</option>
+                      <option value="customers">Paying / emailed customers</option>
+                      <option value="all">All device IDs</option>
                       <option value="premium">Premium</option>
                       <option value="free">Free</option>
                     </select>
@@ -921,7 +1024,8 @@ function AdminCRM() {
                   <table>
                     <thead>
                       <tr>
-                        <th>User</th>
+                        <th>Customer</th>
+                        <th>Email</th>
                         <th>Status</th>
                         <th>Credits</th>
                         <th>Activity</th>
@@ -935,18 +1039,21 @@ function AdminCRM() {
                             <div className={styles.userCell}>
                               <FaUser />
                               <div>
-                                <strong>{user.email || user.userId}</strong>
-                                <span>{user.userId}</span>
+                                <strong>{user.email || 'No email'}</strong>
+                                <button type="button" className={styles.idPill} onClick={() => copyText(user.userId)} title={user.userId}>
+                                  {shortId(user.userId)}
+                                </button>
                               </div>
                             </div>
                           </td>
+                          <td>{user.email || '—'}</td>
                           <td>
                             <span className={`${styles.badge} ${user.isPremium ? styles.badgePremium : styles.badgeFree}`}>
                               {user.isPremium ? '⭐ Premium' : 'Free'}
                             </span>
                           </td>
                           <td>
-                            {userCredits[user.userId]?.credits ?? 'N/A'}
+                            {userCredits[user.userId]?.credits ?? user.credits ?? 0}
                           </td>
                           <td>{user.dailyCount || 0}</td>
                           <td>
@@ -1003,7 +1110,12 @@ function AdminCRM() {
                     <FaUser className={styles.userDetailAvatar} />
                     <div>
                       <h2>{selectedUser.email || selectedUser.userId}</h2>
-                      <p>{selectedUser.userId}</p>
+                      <p>
+                        {selectedUser.userId}{' '}
+                        <button type="button" className={styles.inlineCopy} onClick={() => copyText(selectedUser.userId)}>
+                          <FaCopy /> Copy ID
+                        </button>
+                      </p>
                       <span className={`${styles.badge} ${selectedUser.isPremium ? styles.badgePremium : styles.badgeFree}`}>
                         {selectedUser.isPremium ? '⭐ Premium' : 'Free'}
                       </span>
@@ -1576,6 +1688,7 @@ function AdminCRM() {
           </div>
         </div>
       )}
+      </div>
     </div>
   )
 }

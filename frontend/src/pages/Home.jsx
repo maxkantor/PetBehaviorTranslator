@@ -7,6 +7,7 @@ import { getOrCreateToken, useCredit, getCreditBalance, getCreditToken } from '.
 import { checkAdmin } from '../services/adminService'
 import { trackTranslation, trackOutOfCredits, trackCreditLow, identifyUser } from '../services/analyticsService'
 import CreditBalanceIndicator from '../components/CreditBalanceIndicator'
+import RestoreCredits from '../components/RestoreCredits'
 import SEOHead from '../components/SEOHead'
 import Support from './Support'
 import Credits from './Credits'
@@ -538,6 +539,12 @@ function Home() {
 
       <footer className={styles.footer}>
         <div className={styles.footerContent}>
+          <div className={styles.restoreWrap}>
+            <RestoreCredits onRestored={async () => {
+              const balance = await getCreditBalance()
+              setCreditBalance(balance)
+            }} />
+          </div>
           <div className={styles.footerLinks}>
             <button onClick={() => setShowCreditsModal(true)} className={styles.premiumLink}>
               <FaCoins />

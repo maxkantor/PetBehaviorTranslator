@@ -355,6 +355,20 @@ export const replyToSupportTicket = async (ticketId, replyMessage) => {
 }
 
 // GET /admin/stripe-activities - Get Stripe purchase and refund activities
+export const restoreCreditsByEmail = async (email, targetUserId = null, extraCredits = 0) => {
+  try {
+    const response = await axios.post(`${API_URL}/api/admin/restore-credits`, {
+      email,
+      targetUserId,
+      extraCredits
+    }, getAdminParams())
+    return response.data
+  } catch (error) {
+    console.error('Error restoring credits:', error)
+    throw error
+  }
+}
+
 export const getStripeActivities = async () => {
   try {
     const response = await axios.get(`${API_URL}/api/admin/stripe-activities`, getAdminParams())

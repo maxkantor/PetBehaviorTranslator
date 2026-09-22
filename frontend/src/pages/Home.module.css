@@ -602,6 +602,11 @@
   margin: 0 auto;
 }
 
+.restoreWrap {
+  width: 100%;
+  max-width: 640px;
+}
+
 .footerLinks {
   display: flex;
   gap: 1rem;

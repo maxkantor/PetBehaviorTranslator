@@ -418,6 +418,101 @@ async Task LogActivityAsync(string userId, string activityType, string details)
     }
 }
 
+int ParseCreditsFromDetails(string? details)
+{
+    if (string.IsNullOrWhiteSpace(details))
+        return 0;
+    var match = System.Text.RegularExpressions.Regex.Match(details, @"(\d+)\s+credits", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+    return match.Success && int.TryParse(match.Groups[1].Value, out var parsed) ? parsed : 0;
+}
+
+async Task<UserUsage> EnsureUserWithCreditsAsync(string userId, string? email = null)
+{
+    var usage = await GetUserUsageAsync(userId) ?? new UserUsage { UserId = userId };
+    if (!string.IsNullOrWhiteSpace(email))
+        usage.Email = email.Trim().ToLowerInvariant();
+    usage.LastActivityAt = DateTime.UtcNow;
+    return usage;
+}
+
+async Task PersistUserCreditsAsync(string userId, int creditsRemaining, string? email = null)
+{
+    var usage = await EnsureUserWithCreditsAsync(userId, email);
+    usage.CreditsBalance = Math.Max(0, creditsRemaining);
+    await SaveUserUsageAsync(usage);
+}
+
+async Task<(int Credits, List<string> PurchaseKeys)> GetUnrestoredPurchaseCreditsAsync(string email)
+{
+    var normalized = email.Trim().ToLowerInvariant();
+    var events = await eventLogService.GetRecentEventsAsync(10000);
+    var restored = new HashSet<string>(
+        events.Where(e => e.EventType == "CREDITS_RESTORED" && !string.IsNullOrWhiteSpace(e.StripeSessionId))
+            .Select(e => e.StripeSessionId!),
+        StringComparer.OrdinalIgnoreCase);
+
+    var credits = 0;
+    var keys = new List<string>();
+    foreach (var purchase in events.Where(e =>
+        e.Status == "SUCCESS" &&
+        (e.EventType == "PURCHASE" || e.EventType == "GRANT_CREDITS") &&
+        !string.IsNullOrWhiteSpace(e.Email) &&
+        e.Email.Trim().Equals(normalized, StringComparison.OrdinalIgnoreCase)))
+    {
+        var key = purchase.StripeSessionId ?? $"{purchase.EventType}:{purchase.UserId}:{purchase.Timestamp:O}";
+        if (restored.Contains(key))
+            continue;
+        var parsed = ParseCreditsFromDetails(purchase.Details);
+        if (parsed <= 0)
+            continue;
+        credits += parsed;
+        keys.Add(key);
+    }
+
+    return (credits, keys);
+}
+
+async Task<(int CreditsRestored, string Token, int CreditsRemaining)> RestoreCreditsToUserAsync(string email, string targetUserId, int extraCredits = 0)
+{
+    var normalizedEmail = email.Trim().ToLowerInvariant();
+    var (purchaseCredits, purchaseKeys) = await GetUnrestoredPurchaseCreditsAsync(normalizedEmail);
+
+    var allUsers = await GetAllUsersAsync();
+    var transferable = allUsers
+        .Where(u => !string.IsNullOrWhiteSpace(u.Email)
+                    && u.Email.Equals(normalizedEmail, StringComparison.OrdinalIgnoreCase)
+                    && u.UserId != targetUserId
+                    && u.CreditsBalance > 0)
+        .ToList();
+    var transferred = transferable.Sum(u => u.CreditsBalance);
+
+    foreach (var source in transferable)
+    {
+        source.CreditsBalance = 0;
+        await SaveUserUsageAsync(source);
+    }
+
+    var usage = await EnsureUserWithCreditsAsync(targetUserId, normalizedEmail);
+    usage.CreditsBalance += purchaseCredits + transferred + Math.Max(0, extraCredits);
+    await SaveUserUsageAsync(usage);
+
+    foreach (var key in purchaseKeys)
+    {
+        await eventLogService.LogEventAsync(new EventLogEntry
+        {
+            EventType = "CREDITS_RESTORED",
+            UserId = targetUserId,
+            Email = normalizedEmail,
+            StripeSessionId = key,
+            Status = "SUCCESS",
+            Details = $"Restored purchase {key} to {targetUserId}"
+        });
+    }
+
+    var token = tokenService.CreateToken(targetUserId, 0, usage.CreditsBalance);
+    return (purchaseCredits + transferred + Math.Max(0, extraCredits), token, usage.CreditsBalance);
+}
+
 // Helper function to generate consistent user ID from email (for admins)
 string GenerateUserIdFromEmail(string email)
 {
@@ -868,13 +963,26 @@ app.MapGet("/api/admin/users", async (HttpContext context) =>
     try
     {
         var allUsers = await GetAllUsersAsync();
-        var users = allUsers.Select(u => new
+        var purchaseEvents = await eventLogService.GetRecentEventsAsync(10000);
+        var emailByUserId = purchaseEvents
+            .Where(e => !string.IsNullOrWhiteSpace(e.UserId) && !string.IsNullOrWhiteSpace(e.Email) && e.Email.Contains('@'))
+            .GroupBy(e => e.UserId, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.Select(x => x.Email).First(e => !string.IsNullOrWhiteSpace(e))!, StringComparer.OrdinalIgnoreCase);
+
+        var users = allUsers.Select(u =>
         {
-            u.UserId,
-            u.DailyCount,
-            u.IsPremium,
-            u.PremiumExpiresAt,
-            u.LastResetDate
+            emailByUserId.TryGetValue(u.UserId, out var purchaseEmail);
+            return new
+            {
+                u.UserId,
+                Email = !string.IsNullOrWhiteSpace(u.Email) && u.Email.Contains('@') ? u.Email : purchaseEmail,
+                Credits = u.CreditsBalance,
+                u.DailyCount,
+                u.IsPremium,
+                u.PremiumExpiresAt,
+                u.LastResetDate,
+                LastActivityAt = u.LastActivityAt
+            };
         }).ToList();
         
         await LogActivityAsync(userId, "VIEW_USERS", $"Viewed {users.Count} users");
@@ -1259,27 +1367,28 @@ app.MapPost("/api/admin/grant-credits/{userId}", async (string userId, GrantCred
     payload.CreditsRemaining += request.Credits;
     var newToken = tokenService.UpdateToken(payload);
     
-    // Ensure user exists in DynamoDB
-    var usage = await GetUserUsageAsync(userId);
-    if (usage == null)
-    {
-        usage = new UserUsage { UserId = userId };
-        Console.WriteLine($"[ADMIN] Creating new user entry for {userId} when granting credits");
-    }
-    // Note: UserUsage doesn't store credits (that's in the token), but we save to ensure user appears in admin
+    var usage = await EnsureUserWithCreditsAsync(userId);
+    usage.CreditsBalance = payload.CreditsRemaining;
     try
     {
         await SaveUserUsageAsync(usage);
-        Console.WriteLine($"[ADMIN] ✅ Saved user {userId} to DynamoDB after granting credits");
+        Console.WriteLine($"[ADMIN] ✅ Saved {payload.CreditsRemaining} credits for {userId}");
     }
     catch (Exception ex)
     {
         Console.WriteLine($"[ADMIN] ❌ WARNING: Failed to save user to DynamoDB after granting credits: {ex.Message}");
-        Console.WriteLine($"[ADMIN] Exception type: {ex.GetType().Name}");
-        // Continue anyway - credit granting still succeeded
     }
     
     await LogActivityAsync(adminUserId, "GRANT_CREDITS", $"Granted {request.Credits} credits to user {userId}");
+    await eventLogService.LogEventAsync(new EventLogEntry
+    {
+        EventType = "GRANT_CREDITS",
+        UserId = userId,
+        Email = usage.Email,
+        Status = "SUCCESS",
+        StripeSessionId = $"grant:{userId}:{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}",
+        Details = $"Granted {request.Credits} credits to user {userId}"
+    });
     
     return Results.Ok(new
     {
@@ -1897,23 +2006,14 @@ app.MapPost("/api/admin/set-user-credits/{userId}", async (string userId, SetUse
     var newToken = tokenService.UpdateToken(payload);
     
     // Ensure user exists in DynamoDB
-    var usage = await GetUserUsageAsync(userId);
-    if (usage == null)
-    {
-        usage = new UserUsage { UserId = userId };
-        Console.WriteLine($"[ADMIN] Creating new user entry for {userId} when setting credits");
-    }
-    // Note: UserUsage doesn't store credits (that's in the token), but we save to ensure user appears in admin
     try
     {
-        await SaveUserUsageAsync(usage);
-        Console.WriteLine($"[ADMIN] ✅ Saved user {userId} to DynamoDB after setting credits");
+        await PersistUserCreditsAsync(userId, payload.CreditsRemaining);
+        Console.WriteLine($"[ADMIN] ✅ Saved {payload.CreditsRemaining} credits for {userId}");
     }
     catch (Exception ex)
     {
         Console.WriteLine($"[ADMIN] ❌ WARNING: Failed to save user to DynamoDB after setting credits: {ex.Message}");
-        Console.WriteLine($"[ADMIN] Exception type: {ex.GetType().Name}");
-        // Continue anyway - credit setting still succeeded
     }
     
     await LogActivityAsync(adminUserId, "SET_USER_CREDITS", $"Admin {adminUserId} set user {userId} credits to {request.Credits}");
@@ -2550,6 +2650,7 @@ app.MapPost("/api/payment/webhook", async (HttpContext context) =>
                             {
                                 payload.CreditsRemaining += tier.Credits;
                                 var newToken = tokenService.UpdateToken(payload);
+                                await PersistUserCreditsAsync(userId ?? payload.UserId, payload.CreditsRemaining, customerEmail);
                                 
                                 await eventLogService.LogEventAsync(new EventLogEntry
                                 {
@@ -2822,11 +2923,19 @@ app.MapPost("/api/credits/get-token", async (GetTokenRequest request) =>
     var config = await adminConfigService.GetConfigAsync();
     var effectiveFreeLimit = config.FreeSearchLimit > 0 ? config.FreeSearchLimit : freeSearchLimit;
 
+    if (!string.IsNullOrWhiteSpace(request.Email) && usage != null)
+    {
+        usage.Email = request.Email.Trim().ToLowerInvariant();
+        await SaveUserUsageAsync(usage);
+    }
+
+    var storedCredits = usage?.CreditsBalance ?? 0;
+
     // Create token - if admin, mark as admin token
     var token = tokenService.CreateToken(
         request.UserId, 
         freeSearchesUsed: 0, 
-        creditsRemaining: 0,
+        creditsRemaining: storedCredits,
         isAdmin: isAdmin
     );
 
@@ -2836,7 +2945,7 @@ app.MapPost("/api/credits/get-token", async (GetTokenRequest request) =>
         UserId = request.UserId,
         Email = request.Email,
         Status = "SUCCESS",
-        Details = $"Token issued, isAdmin={isAdmin}"
+        Details = $"Token issued, isAdmin={isAdmin}, credits={storedCredits}"
     });
     
     return Results.Ok(new
@@ -2844,7 +2953,7 @@ app.MapPost("/api/credits/get-token", async (GetTokenRequest request) =>
         token,
         userId = request.UserId,
         freeSearchesUsed = 0,
-        creditsRemaining = 0,
+        creditsRemaining = storedCredits,
         freeSearchLimit = effectiveFreeLimit,
         isAdmin = isAdmin
     });
@@ -2921,10 +3030,17 @@ app.MapPost("/api/credits/use", async (UseCreditsRequest request) =>
         });
     }
 
+    var storedUsage = await GetUserUsageAsync(payload.UserId);
+    if (storedUsage != null && storedUsage.CreditsBalance > payload.CreditsRemaining)
+    {
+        payload.CreditsRemaining = storedUsage.CreditsBalance;
+    }
+
     // No free searches left, check credits
     if (payload.CreditsRemaining > 0)
     {
         payload.CreditsRemaining--;
+        await PersistUserCreditsAsync(payload.UserId, payload.CreditsRemaining, storedUsage?.Email);
         var newToken = tokenService.UpdateToken(payload);
         
         await eventLogService.LogEventAsync(new EventLogEntry
@@ -3310,13 +3426,23 @@ app.MapPost("/api/credits/validate", async (ValidateTokenRequest request) =>
 
     var config = await adminConfigService.GetConfigAsync();
     var effectiveFreeLimit = config.FreeSearchLimit > 0 ? config.FreeSearchLimit : freeSearchLimit;
+    var storedUsage = await GetUserUsageAsync(payload.UserId);
+    var syncedCredits = payload.CreditsRemaining;
+    string? updatedToken = null;
+    if (storedUsage != null && storedUsage.CreditsBalance > payload.CreditsRemaining)
+    {
+        payload.CreditsRemaining = storedUsage.CreditsBalance;
+        syncedCredits = payload.CreditsRemaining;
+        updatedToken = tokenService.UpdateToken(payload);
+    }
 
     return Results.Ok(new
     {
         valid = true,
+        token = updatedToken,
         userId = payload.UserId,
         freeSearchesUsed = payload.FreeSearchesUsed,
-        creditsRemaining = payload.CreditsRemaining,
+        creditsRemaining = syncedCredits,
         freeSearchLimit = effectiveFreeLimit,
         freeSearchesRemaining = Math.Max(0, effectiveFreeLimit - payload.FreeSearchesUsed),
         isAdmin = payload.IsAdmin,
@@ -3701,6 +3827,117 @@ Use a helpful, friendly tone. Keep responses practical and actionable.";
 .WithName("TranslateBehavior")
 .WithOpenApi();
 
+app.MapPost("/api/credits/restore/send-code", async (RestoreSendCodeRequest request) =>
+{
+    if (string.IsNullOrWhiteSpace(request.Email) || !request.Email.Contains('@'))
+        return Results.BadRequest(new { message = "A valid purchase email is required" });
+
+    var normalized = request.Email.Trim().ToLowerInvariant();
+    var (credits, keys) = await GetUnrestoredPurchaseCreditsAsync(normalized);
+    var users = await GetAllUsersAsync();
+    var hasBalance = users.Any(u => !string.IsNullOrWhiteSpace(u.Email)
+        && u.Email.Equals(normalized, StringComparison.OrdinalIgnoreCase)
+        && u.CreditsBalance > 0);
+
+    if (credits <= 0 && keys.Count == 0 && !hasBalance)
+        return Results.BadRequest(new { message = "No purchase found for this email. Use the email from your Stripe receipt." });
+
+    var code = Random.Shared.Next(100000, 999999).ToString();
+    var verifyUser = await EnsureUserWithCreditsAsync($"emailverify:{normalized}", normalized);
+    verifyUser.VerificationCode = code;
+    verifyUser.VerificationExpiresAt = DateTime.UtcNow.AddMinutes(15);
+    await SaveUserUsageAsync(verifyUser);
+
+    try
+    {
+        await SendVerificationEmailAsync(normalized, code, smtpHost, smtpPort, smtpUsername, smtpPassword, supportEmail);
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"[RESTORE] Failed to send verification email: {ex.Message}");
+        return Results.Json(new { message = "Could not send verification email. Try again or contact support." }, statusCode: 500);
+    }
+
+    return Results.Ok(new { success = true, message = $"Verification code sent to {normalized}" });
+})
+.WithName("RestoreSendCode")
+.WithOpenApi();
+
+app.MapPost("/api/credits/restore/verify", async (RestoreVerifyRequest request) =>
+{
+    if (string.IsNullOrWhiteSpace(request.Email) || string.IsNullOrWhiteSpace(request.Code) || string.IsNullOrWhiteSpace(request.UserId))
+        return Results.BadRequest(new { message = "Email, code, and userId are required" });
+
+    var normalized = request.Email.Trim().ToLowerInvariant();
+    var verifyUser = await GetUserUsageAsync($"emailverify:{normalized}");
+    if (verifyUser == null
+        || string.IsNullOrWhiteSpace(verifyUser.VerificationCode)
+        || verifyUser.VerificationExpiresAt == null
+        || verifyUser.VerificationExpiresAt < DateTime.UtcNow
+        || !string.Equals(verifyUser.VerificationCode, request.Code.Trim(), StringComparison.Ordinal))
+    {
+        return Results.BadRequest(new { message = "Invalid or expired verification code. Request a new code." });
+    }
+
+    verifyUser.VerificationCode = null;
+    verifyUser.VerificationExpiresAt = null;
+    await SaveUserUsageAsync(verifyUser);
+
+    var (restored, token, remaining) = await RestoreCreditsToUserAsync(normalized, request.UserId);
+    if (restored <= 0 && remaining <= 0)
+        return Results.BadRequest(new { message = "No credits found to restore for this email." });
+
+    return Results.Ok(new
+    {
+        success = true,
+        token,
+        creditsRestored = restored,
+        creditsRemaining = remaining,
+        message = $"Restored {restored} credits to this device."
+    });
+})
+.WithName("RestoreVerify")
+.WithOpenApi();
+
+app.MapPost("/api/admin/restore-credits", async (AdminRestoreCreditsRequest request, HttpContext context) =>
+{
+    var (isValidSession, sessionUserId) = await ValidateAdminSessionAsync(context);
+    string adminUserId;
+    if (isValidSession && !string.IsNullOrWhiteSpace(sessionUserId))
+    {
+        adminUserId = sessionUserId;
+    }
+    else
+    {
+        adminUserId = context.Request.Query["adminUserId"].ToString();
+        var adminEmail = context.Request.Query["email"].ToString();
+        if (!await IsAdminAsync(adminUserId, adminEmail))
+            return Results.Json(new { message = "Admin access required" }, statusCode: 401);
+    }
+
+    if (string.IsNullOrWhiteSpace(request.Email) || !request.Email.Contains('@'))
+        return Results.BadRequest(new { message = "Purchase email is required" });
+
+    var targetUserId = string.IsNullOrWhiteSpace(request.TargetUserId) ? adminUserId : request.TargetUserId;
+    var extra = request.ExtraCredits ?? 0;
+    var (restored, token, remaining) = await RestoreCreditsToUserAsync(request.Email, targetUserId, extra);
+
+    await LogActivityAsync(adminUserId, "RESTORE_CREDITS", $"Restored {restored} credits from {request.Email} to {targetUserId}");
+
+    return Results.Ok(new
+    {
+        success = true,
+        token,
+        targetUserId,
+        email = request.Email.Trim().ToLowerInvariant(),
+        creditsRestored = restored,
+        creditsRemaining = remaining,
+        message = $"Restored {restored} credits from {request.Email} onto {targetUserId}. Remaining: {remaining}."
+    });
+})
+.WithName("AdminRestoreCredits")
+.WithOpenApi();
+
 // Email helper function
 async Task SendSupportEmailAsync(SupportTicket ticket, string smtpHost, int smtpPort, string smtpUsername, string smtpPassword, string supportEmail, string adminEmail)
 {
@@ -3789,6 +4026,32 @@ Reply-To address: {supportEmail}",
     }
 }
 
+async Task SendVerificationEmailAsync(string email, string code, string smtpHost, int smtpPort, string smtpUsername, string smtpPassword, string supportEmail)
+{
+    if (string.IsNullOrWhiteSpace(smtpHost) || string.IsNullOrWhiteSpace(smtpUsername) || string.IsNullOrWhiteSpace(smtpPassword))
+        throw new InvalidOperationException("Email is not configured");
+
+    using var client = new SmtpClient(smtpHost, smtpPort)
+    {
+        EnableSsl = true,
+        Credentials = new NetworkCredential(smtpUsername, smtpPassword)
+    };
+
+    var mail = new MailMessage
+    {
+        From = new MailAddress(supportEmail, "Pet Behavior Translator"),
+        To = { email },
+        Subject = $"{code} is your Pet Behavior Translator restore code",
+        Body = $@"Use this code to restore credits purchased with {email}:
+
+{code}
+
+This code expires in 15 minutes. If you did not request this, you can ignore this email.",
+        IsBodyHtml = false
+    };
+    await client.SendMailAsync(mail);
+}
+
 // Support running on AWS Lambda
 if (app.Environment.EnvironmentName == "Production")
 {
@@ -3826,6 +4089,9 @@ public record ValidateTokenRequest(string CreditToken);
 // Admin request models
 public record PremiumPlanRequest(string PlanId); // "monthly", "yearly", "lifetime"
 public record GrantCreditsRequest(int Credits, string? ExistingToken = null);
+public record RestoreSendCodeRequest(string Email);
+public record RestoreVerifyRequest(string Email, string Code, string UserId);
+public record AdminRestoreCreditsRequest(string Email, string? TargetUserId = null, int? ExtraCredits = null);
 
 // New Admin request models
 public record AdminConnectRequest(string UserId, string? Email = null);
@@ -3879,6 +4145,11 @@ public class UserUsage
     public DateTime LastResetDate { get; set; } = DateTime.UtcNow.Date;
     public bool IsPremium { get; set; } = false;
     public DateTime? PremiumExpiresAt { get; set; }
+    public string? Email { get; set; }
+    public int CreditsBalance { get; set; } = 0;
+    public DateTime? LastActivityAt { get; set; }
+    public string? VerificationCode { get; set; }
+    public DateTime? VerificationExpiresAt { get; set; }
 }
 
 // Intermediate model for parsing AI response (products as strings)

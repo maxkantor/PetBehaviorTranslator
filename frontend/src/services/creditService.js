@@ -32,8 +32,11 @@ export const getOrCreateToken = async (userId) => {
       // Validate it
       const validation = await validateToken(existingToken)
       if (validation && validation.valid) {
+        if (validation.token) {
+          saveCreditToken(validation.token)
+        }
         return {
-          token: existingToken,
+          token: validation.token || existingToken,
           ...validation
         }
       }
@@ -170,11 +173,27 @@ export const validateToken = async (token) => {
       creditToken: token || getCreditToken()
     })
 
+    if (response.data?.token) {
+      saveCreditToken(response.data.token)
+    }
     return response.data
   } catch (error) {
     console.error('Error validating token:', error)
     return null
   }
+}
+
+export const sendRestoreCode = async (email) => {
+  const response = await axios.post(`${API_URL}/api/credits/restore/send-code`, { email })
+  return response.data
+}
+
+export const verifyAndRestoreCredits = async (email, code, userId) => {
+  const response = await axios.post(`${API_URL}/api/credits/restore/verify`, { email, code, userId })
+  if (response.data?.token) {
+    saveCreditToken(response.data.token)
+  }
+  return response.data
 }
 
 // Get current credit balance

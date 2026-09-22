@@ -32,21 +32,7 @@ public class DynamoDBService
             if (!response.Item.Any())
                 return null;
 
-            var usage = new UserUsage
-            {
-                UserId = response.Item["UserId"].S,
-                DailyCount = response.Item.ContainsKey("DailyCount") ? int.Parse(response.Item["DailyCount"].N) : 0,
-                IsPremium = response.Item.ContainsKey("IsPremium") && response.Item["IsPremium"].BOOL == true,
-                LastResetDate = response.Item.ContainsKey("LastResetDate") 
-                    ? DateTime.Parse(response.Item["LastResetDate"].S) 
-                    : DateTime.UtcNow.Date
-            };
-
-            if (response.Item.ContainsKey("PremiumExpiresAt") && !string.IsNullOrEmpty(response.Item["PremiumExpiresAt"].S))
-            {
-                usage.PremiumExpiresAt = DateTime.Parse(response.Item["PremiumExpiresAt"].S);
-            }
-
+            var usage = MapUserUsage(response.Item);
             return usage;
         }
         catch (Exception ex)
@@ -67,12 +53,29 @@ public class DynamoDBService
                 { "UserId", new AttributeValue { S = usage.UserId } },
                 { "DailyCount", new AttributeValue { N = usage.DailyCount.ToString() } },
                 { "IsPremium", new AttributeValue { BOOL = usage.IsPremium } },
-                { "LastResetDate", new AttributeValue { S = usage.LastResetDate.ToString("O") } }
+                { "LastResetDate", new AttributeValue { S = usage.LastResetDate.ToString("O") } },
+                { "CreditsBalance", new AttributeValue { N = usage.CreditsBalance.ToString() } }
             };
 
             if (usage.PremiumExpiresAt.HasValue)
             {
                 item["PremiumExpiresAt"] = new AttributeValue { S = usage.PremiumExpiresAt.Value.ToString("O") };
+            }
+            if (!string.IsNullOrWhiteSpace(usage.Email))
+            {
+                item["Email"] = new AttributeValue { S = usage.Email };
+            }
+            if (usage.LastActivityAt.HasValue)
+            {
+                item["LastActivityAt"] = new AttributeValue { S = usage.LastActivityAt.Value.ToString("O") };
+            }
+            if (!string.IsNullOrWhiteSpace(usage.VerificationCode))
+            {
+                item["VerificationCode"] = new AttributeValue { S = usage.VerificationCode };
+            }
+            if (usage.VerificationExpiresAt.HasValue)
+            {
+                item["VerificationExpiresAt"] = new AttributeValue { S = usage.VerificationExpiresAt.Value.ToString("O") };
             }
 
             var request = new PutItemRequest
@@ -139,25 +142,7 @@ public class DynamoDBService
 
             Console.WriteLine($"[DYNAMODB] Scanned table {UserUsageTable}, found {response.Items.Count} items");
 
-            return response.Items.Select(item => 
-            {
-                var usage = new UserUsage
-                {
-                    UserId = item["UserId"].S,
-                    DailyCount = item.ContainsKey("DailyCount") ? int.Parse(item["DailyCount"].N) : 0,
-                    IsPremium = item.ContainsKey("IsPremium") && item["IsPremium"].BOOL == true,
-                    LastResetDate = item.ContainsKey("LastResetDate") 
-                        ? DateTime.Parse(item["LastResetDate"].S) 
-                        : DateTime.UtcNow.Date
-                };
-
-                if (item.ContainsKey("PremiumExpiresAt") && !string.IsNullOrEmpty(item["PremiumExpiresAt"].S))
-                {
-                    usage.PremiumExpiresAt = DateTime.Parse(item["PremiumExpiresAt"].S);
-                }
-
-                return usage;
-            }).ToList();
+            return response.Items.Select(MapUserUsage).ToList();
         }
         catch (Amazon.DynamoDBv2.Model.ResourceNotFoundException ex)
         {
@@ -337,6 +322,37 @@ public class DynamoDBService
             Console.WriteLine($"[DYNAMODB] Error getting all support tickets: {ex.Message}");
             return new List<SupportTicket>();
         }
+    }
+
+    private static UserUsage MapUserUsage(Dictionary<string, AttributeValue> item)
+    {
+        var usage = new UserUsage
+        {
+            UserId = item["UserId"].S,
+            DailyCount = item.ContainsKey("DailyCount") ? int.Parse(item["DailyCount"].N) : 0,
+            IsPremium = item.ContainsKey("IsPremium") && item["IsPremium"].BOOL == true,
+            LastResetDate = item.ContainsKey("LastResetDate")
+                ? DateTime.Parse(item["LastResetDate"].S)
+                : DateTime.UtcNow.Date,
+            CreditsBalance = item.ContainsKey("CreditsBalance") ? int.Parse(item["CreditsBalance"].N) : 0,
+            Email = item.ContainsKey("Email") ? item["Email"].S : null,
+            VerificationCode = item.ContainsKey("VerificationCode") ? item["VerificationCode"].S : null
+        };
+
+        if (item.ContainsKey("PremiumExpiresAt") && !string.IsNullOrEmpty(item["PremiumExpiresAt"].S))
+        {
+            usage.PremiumExpiresAt = DateTime.Parse(item["PremiumExpiresAt"].S);
+        }
+        if (item.ContainsKey("LastActivityAt") && !string.IsNullOrEmpty(item["LastActivityAt"].S))
+        {
+            usage.LastActivityAt = DateTime.Parse(item["LastActivityAt"].S);
+        }
+        if (item.ContainsKey("VerificationExpiresAt") && !string.IsNullOrEmpty(item["VerificationExpiresAt"].S))
+        {
+            usage.VerificationExpiresAt = DateTime.Parse(item["VerificationExpiresAt"].S);
+        }
+
+        return usage;
     }
 }
 

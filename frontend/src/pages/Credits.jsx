@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { FaCoins, FaCrown, FaCopyright, FaHeart, FaCheck, FaSpinner, FaGift } from 'react-icons/fa'
 import { getCreditTiers, purchaseCredits, getCreditToken } from '../services/creditService'
+import RestoreCredits from '../components/RestoreCredits'
 import SEOHead from '../components/SEOHead'
 import styles from './Credits.module.css'
 
@@ -161,6 +162,7 @@ function Credits({ onClose }) {
           <p className={styles.securePayment}>
             🔒 Secure payment powered by Stripe
           </p>
+          <RestoreCredits />
         </div>
 
         {onClose ? (
