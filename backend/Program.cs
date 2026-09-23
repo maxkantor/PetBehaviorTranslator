@@ -11,7 +11,7 @@ using Stripe.Checkout;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add AWS Lambda support for Function URLs (HTTP API format)
+// Add AWS Lambda support for Function URLs (HTTP API format) MK
 builder.Services.AddAWSLambdaHosting(LambdaEventSource.HttpApi);
 
 // Add services
