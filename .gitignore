@@ -2,6 +2,8 @@
 secrets.json
 *.secrets.json
 secrets.local.json
+secret-fixed.json
+**/secret-fixed.json
 
 # Environment files
 .env

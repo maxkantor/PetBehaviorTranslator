@@ -33,30 +33,10 @@ if (app.Environment.IsDevelopment())
 
 // Get Credit System configuration
 var freeSearchLimit = builder.Configuration.GetValue<int>("CreditSystem:FreeSearchLimit", 5);
-var tokenSecretSsmParameter = builder.Configuration["CreditSystem:TokenSecretSsmParameter"] 
-    ?? "/pettranslator/credit-token-secret";
 
-// Initialize AWS SSM client for retrieving token secret
-string tokenSecret;
-try
-{
-    using var ssmClient = new Amazon.SimpleSystemsManagement.AmazonSimpleSystemsManagementClient();
-    var request = new Amazon.SimpleSystemsManagement.Model.GetParameterRequest
-    {
-        Name = tokenSecretSsmParameter,
-        WithDecryption = true
-    };
-    var response = await ssmClient.GetParameterAsync(request);
-    tokenSecret = response.Parameter.Value;
-}
-catch (Exception ex)
-{
-    // Fallback to environment variable if SSM fails (for local development)
-    tokenSecret = Environment.GetEnvironmentVariable("CREDIT_TOKEN_SECRET") 
-        ?? throw new InvalidOperationException($"Failed to retrieve token secret from SSM ({tokenSecretSsmParameter}) and CREDIT_TOKEN_SECRET env var not set. Error: {ex.Message}");
-}
-
-// Initialize TokenService
+// All credentials come from SSM Parameter Store via SecretsService
+var secretsService = new SecretsService();
+var tokenSecret = await secretsService.GetRequiredAsync("CREDIT_TOKEN_SECRET");
 var tokenService = new PetBehaviorTranslator.TokenService(tokenSecret);
 
 // Initialize AdminConfigService
@@ -64,21 +44,7 @@ var adminConfigSsmParameter = builder.Configuration["Admin:AdminConfigSsmParamet
     ?? "/pettranslator/admin-config";
 var adminConfigService = new AdminConfigService(adminConfigSsmParameter);
 
-// Initialize SecretsService for retrieving secrets from AWS Secrets Manager
-var secretsServiceSecretName = Environment.GetEnvironmentVariable("SECRETS_MANAGER_SECRET_NAME") 
-    ?? "/pettranslator/app-secrets";
-var secretsService = new SecretsService(secretsServiceSecretName);
-
-// Get all secrets from Secrets Manager (with fallback to environment variables)
-var secrets = await secretsService.GetSecretsAsync();
-
-// Get OpenAI API key
-var openAiApiKey = await secretsService.GetSecretOrEnvAsync("OPENAI_API_KEY", "OPENAI_API_KEY");
-if (string.IsNullOrWhiteSpace(openAiApiKey))
-{
-    openAiApiKey = builder.Configuration["OpenAI:ApiKey"] 
-        ?? throw new InvalidOperationException("OPENAI_API_KEY not found in Secrets Manager or environment variables");
-}
+var openAiApiKey = await secretsService.GetRequiredAsync("OPENAI_API_KEY");
 
 // Get Affiliate configuration
 var amazonTag = await secretsService.GetSecretOrEnvAsync("AMAZON_ASSOCIATE_TAG", "AMAZON_ASSOCIATE_TAG", string.Empty);
@@ -89,31 +55,21 @@ var trackingEnabled = builder.Configuration.GetValue<bool>("Affiliate:TrackingEn
 var smtpHost = await secretsService.GetSecretOrEnvAsync("SMTP_HOST", "SMTP_HOST", string.Empty);
 var smtpPortStr = await secretsService.GetSecretOrEnvAsync("SMTP_PORT", "SMTP_PORT", "587");
 var smtpPort = int.TryParse(smtpPortStr, out var port) ? port : builder.Configuration.GetValue<int>("Email:SmtpPort", 587);
-var smtpUsername = await secretsService.GetSecretOrEnvAsync("SMTP_USERNAME", "SMTP_USERNAME", string.Empty);
-var smtpPassword = await secretsService.GetSecretOrEnvAsync("SMTP_PASSWORD", "SMTP_PASSWORD", string.Empty);
+var smtpUsername = await secretsService.GetSecretOrEnvAsync("SMTP_USERNAME", "SMTP_USERNAME");
+var smtpPassword = await secretsService.GetSecretOrEnvAsync("SMTP_PASSWORD", "SMTP_PASSWORD");
 var supportEmail = await secretsService.GetSecretOrEnvAsync("SUPPORT_EMAIL", "SUPPORT_EMAIL", "support@yourdomain.com");
 var adminEmail = await secretsService.GetSecretOrEnvAsync("ADMIN_EMAIL", "ADMIN_EMAIL", string.Empty);
 
 // Get Stripe configuration
-var stripeSecretKey = await secretsService.GetSecretOrEnvAsync("STRIPE_SECRET_KEY", "STRIPE_SECRET_KEY", string.Empty);
-var stripeWebhookSecret = await secretsService.GetSecretOrEnvAsync("STRIPE_WEBHOOK_SECRET", "STRIPE_WEBHOOK_SECRET", string.Empty);
+var stripeSecretKey = await secretsService.GetSecretOrEnvAsync("STRIPE_SECRET_KEY", "STRIPE_SECRET_KEY");
+var stripeWebhookSecret = await secretsService.GetSecretOrEnvAsync("STRIPE_WEBHOOK_SECRET", "STRIPE_WEBHOOK_SECRET");
 var frontendUrl = await secretsService.GetSecretOrEnvAsync("FRONTEND_URL", "FRONTEND_URL", "https://www.petbehaviortranslator.com");
 
 // Initialize Stripe with API key if available
 if (!string.IsNullOrWhiteSpace(stripeSecretKey))
 {
     StripeConfiguration.ApiKey = stripeSecretKey;
-    Console.WriteLine($"[STRIPE] ✅ Stripe initialized with API key (key starts with: {stripeSecretKey.Substring(0, Math.Min(7, stripeSecretKey.Length))}...)");
-    
-    // Log if it's test or live key
-    if (stripeSecretKey.StartsWith("sk_test_"))
-    {
-        Console.WriteLine("[STRIPE] ⚠️ WARNING: Using TEST mode key (sk_test_)");
-    }
-    else if (stripeSecretKey.StartsWith("sk_live_"))
-    {
-        Console.WriteLine("[STRIPE] ✅ Using PRODUCTION mode key (sk_live_)");
-    }
+    Console.WriteLine("[STRIPE] Stripe initialized from SSM");
 }
 else
 {
@@ -1414,83 +1370,12 @@ app.MapPost("/api/admin/login", async (AdminLoginRequest request) =>
         return Results.BadRequest(new { message = "Username and password are required" });
     }
 
-    // Get admin credentials (try Secrets Manager first, then SSM, then env vars)
-    string adminUsername;
-    string adminPassword;
-    
-    // Try AWS Secrets Manager first (most secure)
-    try
+    var adminUsername = await secretsService.GetSecretOrEnvAsync("ADMIN_USERNAME", "ADMIN_USERNAME");
+    var adminPassword = await secretsService.GetSecretOrEnvAsync("ADMIN_PASSWORD", "ADMIN_PASSWORD");
+    if (string.IsNullOrWhiteSpace(adminUsername) || string.IsNullOrWhiteSpace(adminPassword))
     {
-        using var secretsClient = new Amazon.SecretsManager.AmazonSecretsManagerClient();
-        var secretRequest = new Amazon.SecretsManager.Model.GetSecretValueRequest
-        {
-            SecretId = "/pettranslator/admin-credentials"
-        };
-        var secretResponse = await secretsClient.GetSecretValueAsync(secretRequest);
-        
-        // Parse JSON secret
-        var secretJson = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string>>(secretResponse.SecretString);
-        if (secretJson != null && secretJson.ContainsKey("username") && secretJson.ContainsKey("password"))
-        {
-            adminUsername = secretJson["username"];
-            adminPassword = secretJson["password"];
-            Console.WriteLine("[ADMIN LOGIN] Using AWS Secrets Manager");
-        }
-        else
-        {
-            throw new Exception("Secret does not contain username/password");
-        }
-    }
-    catch (Exception secretsEx)
-    {
-        Console.WriteLine($"[ADMIN LOGIN] Secrets Manager not available: {secretsEx.Message}");
-        
-        // Fallback to SSM Parameter Store
-        try
-        {
-            using var ssmClient = new Amazon.SimpleSystemsManagement.AmazonSimpleSystemsManagementClient();
-            
-            // Get username
-            try
-            {
-                var usernameRequest = new Amazon.SimpleSystemsManagement.Model.GetParameterRequest
-                {
-                    Name = "/pettranslator/admin-username",
-                    WithDecryption = false
-                };
-                var usernameResponse = await ssmClient.GetParameterAsync(usernameRequest);
-                adminUsername = usernameResponse.Parameter.Value;
-            }
-            catch
-            {
-                adminUsername = Environment.GetEnvironmentVariable("ADMIN_USERNAME") ?? "mkantor";
-            }
-            
-            // Get password
-            try
-            {
-                var passwordRequest = new Amazon.SimpleSystemsManagement.Model.GetParameterRequest
-                {
-                    Name = "/pettranslator/admin-password",
-                    WithDecryption = true
-                };
-                var passwordResponse = await ssmClient.GetParameterAsync(passwordRequest);
-                adminPassword = passwordResponse.Parameter.Value;
-            }
-            catch
-            {
-                adminPassword = Environment.GetEnvironmentVariable("ADMIN_PASSWORD") ?? "Maxang11@@##";
-            }
-            
-            Console.WriteLine("[ADMIN LOGIN] Using SSM Parameter Store");
-        }
-        catch (Exception ssmEx)
-        {
-            // Final fallback to environment variables
-            adminUsername = Environment.GetEnvironmentVariable("ADMIN_USERNAME") ?? "mkantor";
-            adminPassword = Environment.GetEnvironmentVariable("ADMIN_PASSWORD") ?? "Maxang11@@##";
-            Console.WriteLine($"[ADMIN LOGIN] Using environment variables fallback: {ssmEx.Message}");
-        }
+        Console.WriteLine("[ADMIN LOGIN] Admin credentials are not configured in SSM");
+        return Results.Json(new { message = "Admin login is not configured" }, statusCode: 500);
     }
 
     // Verify credentials

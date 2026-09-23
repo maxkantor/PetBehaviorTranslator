@@ -16,7 +16,6 @@
     <PackageReference Include="Amazon.Lambda.Serialization.SystemTextJson" Version="3.0.0" />
     <PackageReference Include="AWSSDK.SimpleSystemsManagement" Version="4.0.6.7" />
     <PackageReference Include="AWSSDK.S3" Version="4.0.14.3" />
-    <PackageReference Include="AWSSDK.SecretsManager" Version="4.0.4.1" />
     <PackageReference Include="AWSSDK.DynamoDBv2" Version="4.0.10.4" />
     <PackageReference Include="AWSSDK.Core" Version="4.0.3.6" />
     <PackageReference Include="Stripe.net" Version="45.0.0" />
